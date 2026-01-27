@@ -1,2 +1,6 @@
 *.pyc
 logs
+"best.pt" 
+"*.mp4" 
+"*.avi" 
+"__pycache__/" 
