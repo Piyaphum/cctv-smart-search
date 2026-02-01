@@ -138,8 +138,8 @@ with col_sidebar:
     enable_email = st.checkbox("Enable Email Report?")
     recipient_email = st.text_input("Recipient Email")
     # Credentials (Hardcoded for convenience)
-    sender_email = "piyaphum1492@gmail.com" 
-    sender_password = "gite wrcl rtkg iyca" 
+    sender_email = "youremail@gmail.com" # แก้อีเมล
+    sender_password = "abcd wrcl rtkg iyca" # แก้ password app ของ email ที่ได้จาก google
 
     target_embeddings = []
     target_hists_full = []
