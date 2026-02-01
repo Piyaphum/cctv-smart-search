@@ -57,8 +57,41 @@
 
 ### 2. ขั้นตอนการติดตั้ง (Step-by-Step)
 
-**ขั้นตอนที่ 1: ดาวน์โหลดโค้ดจาก GitHub**
-เปิด Terminal (หรือ CMD) แล้วพิมพ์คำสั่ง:
-```bash
-git clone [https://github.com/Piyaphum/cctv-smart-search.git](https://github.com/Piyaphum/cctv-smart-search.git)
-cd cctv-smart-search
+   **ขั้นตอนที่ 1: ดาวน์โหลดโค้ดจาก GitHub**
+      เปิด Terminal (หรือ CMD) แล้วพิมพ์คำสั่ง:
+      ```bash
+      git clone [https://github.com/Piyaphum/cctv-smart-search.git](https://github.com/Piyaphum/cctv-smart-search.git)
+      cd cctv-smart-search
+
+   **ขั้นตอนที่ 2: สร้างจำลองสภาพแวดล้อม (Virtual Environment) ขั้นตอนนี้สำคัญ! เพื่อป้องกันไม่ให้ Library ตีกับโปรเจคอื่นในเครื่อง**
+      ```bash
+      python -m venv venv
+      venv\Scripts\activate
+
+   **ขั้นตอนที่ 3: ติดตั้ง Library ที่จำเป็น คำสั่งนี้จะดาวน์โหลด AI Model และเครื่องมือทั้งหมดตามไฟล์**
+      ```bash
+      pip install -r requirements.txt
+
+## ⚙️ การตั้งค่าอีเมล (Email Configuration)
+   สำคัญ: ก่อนเริ่มใช้งาน คุณต้องแก้ไขโค้ดเพื่อตั้งค่าอีเมลผู้ส่ง (Sender) ให้เป็นของคุณเอง ไม่อย่างนั้นระบบแจ้งเตือนจะไม่ทำงาน
+   1. เปิดไฟล์ app.py ด้วย VS Code หรือ Notepad
+   2. ค้นหาบรรทัดที่เขียนว่า sender_email (ประมาณบรรทัดที่ 124)
+   3. แก้ไขข้อมูลดังนี้:
+     ```bash
+      # แก้ไขข้อมูลในส่วนนี้ให้เป็นของคุณ
+      sender_email = "your_email@gmail.com"        # ใส่อีเมล Gmail ของคุณที่จะใช้ส่ง
+      sender_password = "xxxx xxxx xxxx xxxx"      # ใส่ App Password 16 หลัก (ไม่ใช่รหัสผ่านล็อกอินปกติ)
+
+## วิธีขอ App Password ของ Gmail:
+   1. ไปที่ Google Account > Security (ความปลอดภัย)
+   2. เปิดใช้งาน 2-Step Verification (การยืนยันแบบ 2 ขั้นตอน)
+   3. ค้นหาคำว่า "App passwords" (รหัสผ่านแอป)
+   4. สร้างรหัสใหม่ ตั้งชื่อว่า "CCTV App" แล้วนำรหัส 16 ตัวที่ได้มาใส่ในโค้ด
+
+## วิธีการรันโปรแกรม (How to Run)
+   1. รันคำสั่งใน Terminal
+      ```bash
+      streamlit run app.py
+   2. เริ่มใช้งาน
+         โปรแกรมจะเปิดหน้าเว็บขึ้นมาให้เองโดยอัตโนมัติ (ปกติจะอยู่ที่ http://localhost:8501)
+         หากเว็บไม่เด้งขึ้นมา ให้ก๊อปปี้ URL http://localhost:8501 ไปวางใน Google Chrome
