@@ -60,15 +60,15 @@
    **ขั้นตอนที่ 1: ดาวน์โหลดโค้ดจาก GitHub**
       เปิด Terminal (หรือ CMD) แล้วพิมพ์คำสั่ง:
       
-      ```bash
-            git clone [https://github.com/Piyaphum/cctv-smart-search.git](https://github.com/Piyaphum/cctv-smart-search.git)
-            cd cctv-smart-search
+      ```
+      git clone [https://github.com/Piyaphum/cctv-smart-search.git](https://github.com/Piyaphum/cctv-smart-search.git)
+      cd cctv-smart-search
 
    **ขั้นตอนที่ 2: สร้างจำลองสภาพแวดล้อม (Virtual Environment) ขั้นตอนนี้สำคัญ! เพื่อป้องกันไม่ให้ Library ตีกับโปรเจคอื่นในเครื่อง**
       
-      ```bash
-         python -m venv venv
-         venv\Scripts\activate
+      ```
+      python -m venv venv
+      venv\Scripts\activate
 
    **ขั้นตอนที่ 3: ติดตั้ง Library ที่จำเป็น คำสั่งนี้จะดาวน์โหลด AI Model และเครื่องมือทั้งหมดตามไฟล์**
       ```bash
@@ -92,8 +92,7 @@
 
 ## วิธีการรันโปรแกรม (How to Run)
    1. รันคำสั่งใน Terminal
-
-      ```bash
+      ```
       streamlit run app.py
    
    3. เริ่มใช้งาน
