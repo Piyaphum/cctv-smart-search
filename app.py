@@ -272,7 +272,7 @@ with col_main:
             if enable_email:
                 with st.spinner("📧 Sending Email Report..."):
                     success, msg = send_email_report(all_videos_log, recipient_email, sender_email, sender_password)
-                    if success: st.toast("Email Sent Successfully!"git add ., icon="📧")
+                    if success: st.toast("Email Sent Successfully!", icon="📧")
                     else: st.error(msg)
         else:
 
