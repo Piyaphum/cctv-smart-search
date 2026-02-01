@@ -1,6 +1,8 @@
-*.pyc
-logs
-"best.pt" 
-"*.mp4" 
-"*.avi" 
-"__pycache__/" 
+__pycache__/
+*.mp4
+*.avi
+*.mov
+temp_video/
+videos/
+cctv_logs.db
+.env
