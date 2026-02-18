@@ -174,7 +174,7 @@ tab1, tab2 = st.tabs(["🎥 Search Operation", "📂 Result Gallery"])
 # --- TAB 1: Search ---
 with tab1:
     col_sidebar, col_main = st.columns([1, 2])
-
+    
     with col_sidebar:
         st.header("1. Target Config")
         # --- [NEW] อัปโหลด Target ได้หลายคน ---
