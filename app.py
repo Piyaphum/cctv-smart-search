@@ -166,8 +166,120 @@ def send_email_report(summary_dict, recipient_email, sender_email, sender_passwo
         return False, str(e)
 
 # --- 4. Main UI ---
-st.set_page_config(page_title="Multi-Target CCTV Search", layout="wide")
-st.title("🕵️‍♂️ Multi-Target CCTV Search")
+st.set_page_config(page_title="Multi-Target CCTV Search | KU Theme", layout="wide")
+
+# Custom CSS for KU Theme
+st.markdown("""
+    <style>
+        /* Primary Colors */
+        :root {
+            --ku-green: #006664;
+            --ku-fresh-green: #B2BB1E;
+        }
+        
+        .main {
+            background-color: #f8f9fa;
+        }
+        
+        /* Headers */
+        h1, h2, h3, h4 {
+            color: var(--ku-green) !important;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background-color: #ffffff;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        /* Buttons */
+        .stButton>button {
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 600 !important;
+        }
+        
+        .stButton>button[kind="primary"] {
+            background-color: var(--ku-green) !important;
+            border: none !important;
+        }
+        
+        .stButton>button[kind="primary"]:hover {
+            background-color: var(--ku-fresh-green) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 6px;
+            background-color: transparent;
+        }
+        
+        /* Inactive Tab: เขียวอ่อน ข้อความเข้ม */
+        .stTabs [data-baseweb="tab"] {
+            background-color: #d4edec !important;
+            border-radius: 8px 8px 0 0 !important;
+            padding: 10px 22px !important;
+            border: 2px solid #a8d5d3 !important;
+            border-bottom: none !important;
+            color: #003d3c !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+        }
+        
+        /* Inactive Tab Hover */
+        .stTabs [data-baseweb="tab"]:hover {
+            background-color: #b5dedd !important;
+            color: #002828 !important;
+        }
+        
+        /* Active Tab: เขียวเกษตรเข้ม ข้อความขาว */
+        .stTabs [aria-selected="true"] {
+            background-color: var(--ku-green) !important;
+            color: white !important;
+            border: 2px solid var(--ku-green) !important;
+            border-bottom: none !important;
+        }
+        
+        /* Tab panel border */
+        .stTabs [data-baseweb="tab-panel"] {
+            border: 2px solid #a8d5d3;
+            border-radius: 0 8px 8px 8px;
+            padding: 16px;
+        }
+
+        /* User Manual Floating Button */
+        #manual-btn {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            z-index: 9999;
+            background-color: var(--ku-green);
+            color: white !important;
+            padding: 12px 24px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+            border: 2px solid white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #manual-btn:hover {
+            background-color: var(--ku-fresh-green);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+    </style>
+    <a href="#user-manual" id="manual-btn">
+        📖 คู่มือการใช้งาน
+    </a>
+    """, unsafe_allow_html=True)
+
+st.title("CCTV Search")
 
 tab1, tab2 = st.tabs(["🎥 Search Operation", "📂 Result Gallery"])
 
@@ -186,7 +298,7 @@ with tab1:
         
         # ⚠️ อย่าลืมแก้ตรงนี้
         sender_email = "piyaphum1492@gmail.com" 
-        sender_password = "ybsf grhy bgdd mlcb" 
+        sender_password = "vhvp varc qflt ryxv" 
 
         # Process Targets
         targets_db = [] # เก็บข้อมูล Target ทุกคน
@@ -374,3 +486,39 @@ with tab2:
                     st.caption("No images.")
     else:
         st.warning("Results directory not found.")
+
+# --- 5. User Manual Section ---
+st.divider()
+st.markdown("<div id='user-manual'></div>", unsafe_allow_html=True)
+with st.expander("📖 คู่มือการใช้งาน (User Manual)", expanded=False):
+    st.write("""
+    ### วิธีใช้งานระบบ Multi-Target CCTV Search (KU Edition)
+    
+    ยินดีต้อนรับสู่ระบบค้นหาบุคคลจากกล้องวงจรปิดธีม ม.เกษตร!
+    
+    #### 🛠️ ขั้นตอนการใช้งาน:
+    1. **อัปโหลดภาพเป้าหมาย (Target Config):** 
+       - อัปโหลดรูปภาพใบหน้าหรือตัวบุคคลที่ต้องการค้นหา (รองรับหลายคนพร้อมกัน)
+       - ระบบจะสร้าง Embedding และ Histogram เพื่อใช้ในการเปรียบเทียบ
+    
+    2. **ตั้งค่าการแจ้งเตือน (Email Report):**
+       - ติ๊กถูกที่ช่อง 'Email Report?' 
+       - กรอกอีเมลผู้รับเพื่อรับรายงานสรุปผลการตรวจพบ
+    
+    3. **อัปโหลดวิดีโอ (Video Scanning):**
+       - เลือกไฟล์วิดีโอ CCTV (mp4, avi) ที่ต้องการสแกน
+    
+    4. **ปรับตั้งค่าการค้นหา:**
+       - **Threshold:** ค่าความแม่นยำในการจับคู่ (แนะนำ 0.70)
+       - **Shirt Strictness:** ความเข้มงวดในการเทียบสีเสื้อ (ช่วยลด False Positive)
+       - **Snapshot Interval:** ความถี่ในการดึงภาพจากวิดีโอมาวิเคราะห์
+    
+    5. **เริ่มการค้นหา:**
+       - กดปุ่ม **🚀 Start Multi-Search** และรอระบบประมวลผล
+    
+    6. **ตรวจสอบผลลัพธ์:**
+       - ผลลัพธ์ที่ตรวจพบจะแสดงแบบ Real-time และถูกเก็บไว้ในแท็บ **📂 Result Gallery**
+    
+    ---
+    *หากพบปัญหาการใช้งาน ติดต่อผู้ดูแลระบบ*
+    """)
