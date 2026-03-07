@@ -128,12 +128,12 @@ def maintain_storage_limit():
             except: pass
 
 # --- 3. Email Function (Detailed Report) ---
-def send_email_report(summary_dict, recipient_email, sender_email, sender_password):
+def send_email_report(summary_dict, recipient_emails, sender_email, sender_password):
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f'🚨 Security Alert: Found Matches in {len(summary_dict)} Videos'
         msg['From'] = sender_email
-        msg['To'] = recipient_email
+        msg['To'] = ", ".join(recipient_emails)
         
         # สร้างเนื้อหา HTML แยกตามวิดีโอ
         report_html = ""
@@ -294,7 +294,13 @@ with tab1:
         
         st.divider()
         enable_email = st.checkbox("Email Report?", value=True)
-        recipient_email = st.text_input("Recipient Email")
+        recipient_emails = []
+        if enable_email:
+            num_recipients = int(st.number_input("Number of recipients", min_value=1, step=1, value=1))
+            for i in range(num_recipients):
+                r_email = st.text_input(f"Recipient {i+1} Email", key=f"recipient_email_{i}")
+                if r_email:
+                    recipient_emails.append(r_email)
         
         # ⚠️ อย่าลืมแก้ตรงนี้
         sender_email = "piyaphum1492@gmail.com" 
@@ -428,7 +434,7 @@ with tab1:
                                         maintain_storage_limit()
                                         
                                         # แสดงผลหน้าเว็บ
-                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n{curr_time:.1f}s | {highest_score:.2f}")
+                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n{curr_time:.1f}s | {highest_score * 100:.0f}%")
 
                         cap.release()
                     except Exception as e:
@@ -446,11 +452,13 @@ with tab1:
             
             if total_found > 0:
                 st.success(f"Found {total_found} matches total.")
-                if enable_email:
+                if enable_email and len(recipient_emails) > 0:
                     with st.spinner("Sending Report..."):
-                        success, msg = send_email_report(report_summary, recipient_email, sender_email, sender_password)
+                        success, msg = send_email_report(report_summary, recipient_emails, sender_email, sender_password)
                         if success: st.toast("Email Sent!", icon="📧")
                         else: st.error(msg)
+                elif enable_email:
+                    st.warning("No recipient emails provided.")
             else:
                 st.warning("No matches found.")
 
