@@ -15,6 +15,14 @@ import os
 import datetime
 import glob
 import shutil
+import yaml
+import streamlit_authenticator as stauth
+
+# --- ใหม่: นำเข้าฟังก์ชัน Database ของเรา ---
+from database import init_db, log_search, get_history
+
+# เริ่มต้นฐานข้อมูล (สร้างตารางถ้ายังไม่มี)
+init_db()
 
 # --- CONFIG: ตั้งค่า URL ---
 WEB_APP_URL = "http://localhost:8501"
@@ -131,14 +139,14 @@ def maintain_storage_limit():
 def send_email_report(summary_dict, recipient_emails, sender_email, sender_password):
     try:
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = f'🚨 Security Alert: Found Matches in {len(summary_dict)} Videos'
+        msg['Subject'] = f'Security Alert: Found Matches in {len(summary_dict)} Videos'
         msg['From'] = sender_email
         msg['To'] = ", ".join(recipient_emails)
         
         # สร้างเนื้อหา HTML แยกตามวิดีโอ
         report_html = ""
         for video_name, targets in summary_dict.items():
-            report_html += f"<h3>📹 Video: {video_name}</h3><ul>"
+            report_html += f"<h3>Video: {video_name}</h3><ul>"
             for target_name, count in targets.items():
                 report_html += f"<li>⚠️ พบ <b>{target_name}</b> จำนวน <b>{count}</b> ครั้ง</li>"
             report_html += "</ul><hr>"
@@ -146,7 +154,7 @@ def send_email_report(summary_dict, recipient_emails, sender_email, sender_passw
         html_body = f"""
         <html>
             <body style="font-family:Arial, sans-serif;">
-                <h2 style="color:#d9534f;">🚨 Security Alert Notification</h2>
+                <h2 style="color:#d9534f;"> Security Alert Notification</h2>
                 {report_html}
                 <p>คลิกปุ่มด้านล่างเพื่อดูรูปภาพเหตุการณ์:</p>
                 <a href="{WEB_APP_URL}" style="background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">
@@ -167,6 +175,46 @@ def send_email_report(summary_dict, recipient_emails, sender_email, sender_passw
 
 # --- 4. Main UI ---
 st.set_page_config(page_title="Multi-Target CCTV Search | KU Theme", layout="wide")
+
+# ─────────────────────────────────────────────────────────────────
+# 🔐 ระบบ LOGIN — ต้องผ่านก่อนถึงจะเข้าถึงหน้าหลักได้
+# วิธีทำงาน:
+#   1. โหลด users จากไฟล์ auth_config.yaml
+#   2. สร้าง Authenticator object
+#   3. แสดง login form — ถ้ายังไม่ login จะ stop ที่นี่
+# ─────────────────────────────────────────────────────────────────
+with open('auth_config.yaml', 'r', encoding='utf-8') as f:
+    auth_config = yaml.safe_load(f)
+
+authenticator = stauth.Authenticate(
+    auth_config['credentials'],
+    auth_config['cookie']['name'],
+    auth_config['cookie']['key'],
+    auth_config['cookie']['expiry_days']
+)
+
+# แสดง Login Form (ถ้ายังไม่ได้ login)
+login_result = authenticator.login(location='main')
+
+# ดึงสถานะ authentication จาก session_state
+if not st.session_state.get('authentication_status'):
+    if st.session_state.get('authentication_status') is False:
+        st.error('❌ Username หรือ Password ไม่ถูกต้อง')
+    else:
+        st.info('👆 กรุณา Login ก่อนใช้งานระบบ')
+    st.stop()  # ← หยุดแสดงโค้ดที่เหลือทั้งหมด ถ้ายังไม่ login
+
+# ถ้า Login สำเร็จ — ดึงข้อมูล user ที่ login อยู่
+current_user = st.session_state.get('username', 'unknown')
+current_name = st.session_state.get('name', 'Unknown')
+current_role = auth_config['credentials']['usernames'].get(current_user, {}).get('role', 'viewer')
+
+# แสดงปุ่ม Logout และชื่อ User ใน Sidebar
+with st.sidebar:
+    st.markdown(f"### 👤 {current_name}")
+    st.caption(f"Role: `{current_role}`")
+    authenticator.logout('Logout', 'sidebar')
+    st.divider()
 
 # Custom CSS for KU Theme
 st.markdown("""
@@ -329,7 +377,7 @@ with tab1:
         shirt_strictness = c2.slider("Shirt Strictness", 0.0, 1.0, 0.6)
         snapshot_interval = c3.slider("Snapshot (sec)", 0.5, 5.0, 1.0) 
 
-        if st.button("🚀 Start Multi-Search", type="primary") and video_files and targets_db:
+        if st.button("Start Multi-Search", type="primary") and video_files and targets_db:
             
             clear_old_results()
             
@@ -344,7 +392,7 @@ with tab1:
                 video_name = video_file.name
                 report_summary[video_name] = {} # เริ่มต้นนับของวิดีโอนี้
                 
-                status_text.write(f"🎞️ Processing: **{video_name}**")
+                status_text.write(f"Processing: **{video_name}**")
                 
                 with st.expander(f"Monitoring: {video_name}", expanded=True):
                     # Save Video to Temp
@@ -450,6 +498,21 @@ with tab1:
             # เช็คว่าเจอใครบ้างมั้ย
             total_found = sum([sum(v.values()) for v in report_summary.values()])
             
+            # ─────────────────────────────────────────────────────────
+            # 💾 บันทึก Search History ลง Database
+            # วนลูปผลลัพธ์ทุกวิดีโอ และทุก target แล้วบันทึกลง DB
+            # ─────────────────────────────────────────────────────────
+            for vid_name, targets in report_summary.items():
+                for tgt_name, count in targets.items():
+                    log_search(
+                        username=current_user,
+                        video_name=vid_name,
+                        target_name=tgt_name,
+                        total_found=count
+                    )
+            if total_found > 0:
+                st.toast(f"💾 บันทึกผลลัพธ์ลง Database แล้ว", icon="🗄️")
+            
             if total_found > 0:
                 st.success(f"Found {total_found} matches total.")
                 if enable_email and len(recipient_emails) > 0:
@@ -498,13 +561,13 @@ with tab2:
 # --- 5. User Manual Section ---
 st.divider()
 st.markdown("<div id='user-manual'></div>", unsafe_allow_html=True)
-with st.expander("📖 คู่มือการใช้งาน (User Manual)", expanded=False):
+with st.expander("คู่มือการใช้งาน (User Manual)", expanded=False):
     st.write("""
     ### วิธีใช้งานระบบ Multi-Target CCTV Search (KU Edition)
     
     ยินดีต้อนรับสู่ระบบค้นหาบุคคลจากกล้องวงจรปิดธีม ม.เกษตร!
     
-    #### 🛠️ ขั้นตอนการใช้งาน:
+    #### ขั้นตอนการใช้งาน:
     1. **อัปโหลดภาพเป้าหมาย (Target Config):** 
        - อัปโหลดรูปภาพใบหน้าหรือตัวบุคคลที่ต้องการค้นหา (รองรับหลายคนพร้อมกัน)
        - ระบบจะสร้าง Embedding และ Histogram เพื่อใช้ในการเปรียบเทียบ
@@ -522,7 +585,7 @@ with st.expander("📖 คู่มือการใช้งาน (User Manua
        - **Snapshot Interval:** ความถี่ในการดึงภาพจากวิดีโอมาวิเคราะห์
     
     5. **เริ่มการค้นหา:**
-       - กดปุ่ม **🚀 Start Multi-Search** และรอระบบประมวลผล
+       - กดปุ่ม **Start Multi-Search** และรอระบบประมวลผล
     
     6. **ตรวจสอบผลลัพธ์:**
        - ผลลัพธ์ที่ตรวจพบจะแสดงแบบ Real-time และถูกเก็บไว้ในแท็บ **📂 Result Gallery**

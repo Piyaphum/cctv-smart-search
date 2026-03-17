@@ -7,3 +7,7 @@ torchvision
 ultralytics
 scipy
 Pillow
+# --- ใหม่: สำหรับระบบ Login + Database ---
+streamlit-authenticator==0.3.3
+PyYAML
+bcrypt

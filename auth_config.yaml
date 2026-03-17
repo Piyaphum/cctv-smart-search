@@ -1,0 +1,16 @@
+cookie:
+  expiry_days: 1
+  key: cctv_ku_secret_key_2024
+  name: cctv_search_cookie
+credentials:
+  usernames:
+    admin:
+      email: admin@ku.th
+      name: Admin
+      password: $2b$12$B9.37ThKMyGTbXut9a3tT.V8.Ga.1ze0YyPsaRCAbo3kv1ZOuDmp.
+      role: admin
+    officer1:
+      email: officer1@ku.th
+      name: Officer 1
+      password: $2b$12$x6hKJjne5p9JBAJxluljfefyw6JRIOCLxa20JigEasB1mPmAXz8xS
+      role: viewer
