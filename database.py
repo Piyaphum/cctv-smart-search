@@ -15,6 +15,7 @@
 
 import sqlite3
 import datetime
+import pickle  # ใช้สำหรับแปลง list/array ให้เก็บเป็น BLOB ในฐานข้อมูลได้
 
 # ชื่อไฟล์ฐานข้อมูล (จะถูกสร้างอัตโนมัติถ้ายังไม่มี)
 DB_PATH = "cctv_search.db"
@@ -54,6 +55,20 @@ def init_db():
             score       REAL    NOT NULL,
             timestamp_s REAL    NOT NULL,
             FOREIGN KEY (search_id) REFERENCES search_history(id)
+        )
+    """)
+
+    # ตาราง 3: [NEW] target_profiles
+    # เก็บข้อมูล "ผู้ต้องสงสัย" ที่ประมวลผลแล้ว (Embedding & Histograms) เพื่อให้เรียกใช้ซ้ำได้
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS target_profiles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            embeddings  BLOB    NOT NULL,
+            hists_full  BLOB    NOT NULL,
+            hists_top   BLOB    NOT NULL,
+            created_by  TEXT    NOT NULL,
+            created_at  TEXT    NOT NULL
         )
     """)
 
@@ -113,6 +128,30 @@ def log_detection(search_id: int, score: float, timestamp_s: float):
 
     conn.commit()
     conn.close()
+
+def save_target_profile(name: str, embeddings: list, hists_full: list, hists_top: list, created_by: str) -> int:
+    """
+    บันทึก Target ที่ประมวลผล AI เสร็จแล้วลง Database เพื่อเรียกใช้ซ้ำ
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # ใช้ pickle.dumps เพื่อแปลงข้อมูลที่เป็น List/NumPy ให้เป็น Binary (BLOB)
+    emb_blob = pickle.dumps(embeddings)
+    hf_blob = pickle.dumps(hists_full)
+    ht_blob = pickle.dumps(hists_top)
+
+    cursor.execute("""
+        INSERT INTO target_profiles (name, embeddings, hists_full, hists_top, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, emb_blob, hf_blob, ht_blob, created_by, now))
+
+    profile_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return profile_id
 
 
 # ─────────────────────────────────────────────
@@ -180,3 +219,45 @@ def get_summary_stats() -> dict:
         "total_detected": total_detected,
         "top_users": top_users
     }
+
+def get_all_target_profiles() -> list:
+    """
+    โหลด Target Profiles ทั้งหมดที่บันทึกไว้ (สำหรับโชว์ตัวเลือกใน Sidebar)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name, embeddings, hists_full, hists_top, created_by, created_at 
+        FROM target_profiles 
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+
+    profiles = []
+    for r in rows:
+        # ดึง BLOB กลับมาเป็นโครงสร้างเดิมด้วย pickle.loads
+        profiles.append({
+            "id": r["id"],
+            "name": r["name"],
+            # โหลดคืนเป็น List/Array
+            "embeddings": pickle.loads(r["embeddings"]),
+            "hists_full": pickle.loads(r["hists_full"]),
+            "hists_top": pickle.loads(r["hists_top"]),
+            "created_by": r["created_by"],
+            "created_at": r["created_at"],
+            "image": None # ปกติจะไม่เซพรูปใหญๆ ลง DB จะเอาไว้โชว์แยก
+        })
+    conn.close()
+    return profiles
+
+def delete_target_profile(profile_id: int):
+    """
+    ลบ Profile แจ้งลบผ่าน Admin/User
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM target_profiles WHERE id = ?", (profile_id,))
+    conn.commit()
+    conn.close()

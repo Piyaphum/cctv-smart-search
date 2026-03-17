@@ -17,9 +17,11 @@ import glob
 import shutil
 import yaml
 import streamlit_authenticator as stauth
+from sklearn.cluster import KMeans
+import webcolors
 
 # --- ใหม่: นำเข้าฟังก์ชัน Database ของเรา ---
-from database import init_db, log_search, get_history
+from database import init_db, log_search, get_history, save_target_profile, get_all_target_profiles, delete_target_profile
 
 # เริ่มต้นฐานข้อมูล (สร้างตารางถ้ายังไม่มี)
 init_db()
@@ -80,6 +82,42 @@ def get_part_histogram(image_pil, part='full'):
     hist = cv2.calcHist([img_hsv], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
     cv2.normalize(hist, hist)
     return hist.flatten()
+
+def closest_color(requested_color):
+    """หาชื่อสีที่ใกล้เคียงที่สุดจาก RGB"""
+    min_colors = {}
+    for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
+        r_c, g_c, b_c = webcolors.hex_to_rgb(key)
+        rd = (r_c - requested_color[0]) ** 2
+        gd = (g_c - requested_color[1]) ** 2
+        bd = (b_c - requested_color[2]) ** 2
+        min_colors[(rd + gd + bd)] = name
+    return min_colors[min(min_colors.keys())]
+
+def get_dominant_color_name(image_pil):
+    """สกัดสีเด่นจากเสื้อผ้า (ครึ่งบนของภาพ)"""
+    try:
+        img_np = np.array(image_pil)
+        h, w, _ = img_np.shape
+        # ตัดเอาแค่ 40% ด้านบน (ช่วงหน้าอก-ไหล่ ไม่เอาหน้า)
+        top_crop = img_np[int(h*0.15):int(h*0.5), :]
+        
+        # Reshape สำหรับ KMeans
+        pixels = top_crop.reshape(-1, 3)
+        
+        # รัน KMeans หา 2 สีหลัก
+        kmeans = KMeans(n_clusters=2, n_init=10, random_state=42)
+        kmeans.fit(pixels)
+        
+        # สีที่มีพื้นที่เยอะที่สุดใน 2 สี
+        counts = np.bincount(kmeans.labels_)
+        dominant = kmeans.cluster_centers_[np.argmax(counts)]
+        
+        # แปลง RGB เป็นชื่อสี
+        color_name = closest_color([int(dominant[0]), int(dominant[1]), int(dominant[2])])
+        return color_name.capitalize()
+    except Exception as e:
+        return "Unknown"
 
 def generate_target_data(image_file, model, base_tf, aug_tf, n_aug=10):
     """สร้าง Embeddings สำหรับ Target 1 คน"""
@@ -147,8 +185,11 @@ def send_email_report(summary_dict, recipient_emails, sender_email, sender_passw
         report_html = ""
         for video_name, targets in summary_dict.items():
             report_html += f"<h3>Video: {video_name}</h3><ul>"
-            for target_name, count in targets.items():
-                report_html += f"<li>⚠️ พบ <b>{target_name}</b> จำนวน <b>{count}</b> ครั้ง</li>"
+            for target_name, logs in targets.items():
+                count = len(logs)
+                # ดึงสีเสื้อมาโชว์ในเมลด้วย (สุ่มมาสักสีหรือเอาสีแรก)
+                color = logs[0]["color"] if logs else "Unknown"
+                report_html += f"<li>⚠️ พบ <b>{target_name}</b> จำนวน <b>{count}</b> ครั้ง (👕 สีที่ใส่: {color})</li>"
             report_html += "</ul><hr>"
 
         html_body = f"""
@@ -337,9 +378,68 @@ with tab1:
     
     with col_sidebar:
         st.header("1. Target Config")
-        # --- [NEW] อัปโหลด Target ได้หลายคน ---
-        target_files = st.file_uploader("Upload Targets (1 or more)", type=['jpg', 'png'], accept_multiple_files=True)
         
+        targets_db = [] # เก็บข้อมูล Target ทุกคนที่เลือก
+        
+        # --- TAB ย่อยสำหรับจัดการ Target ---
+        t_tab1, t_tab2 = st.tabs(["🗃️ Load from DB", "➕ New Upload"])
+        
+        with t_tab1:
+            saved_targets = get_all_target_profiles()
+            if saved_targets:
+                st.caption("เลือกคนที่เคยบันทึกไว้แล้ว:")
+                for tgt in saved_targets:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        if st.checkbox(f"🧑 {tgt['name']}", key=f"sel_{tgt['id']}"):
+                            # ถ้าติ๊กเลือก ให้แปลงกลับเป็นรูปแบบที่ระบบ search เข้าใจ
+                            targets_db.append({
+                                "name": tgt["name"],
+                                "image": None, # รูปไม่มีเพราะโหลดจาก DB คืน
+                                "embeddings": tgt["embeddings"],
+                                "hists_full": tgt["hists_full"],
+                                "hists_top": tgt["hists_top"]
+                            })
+                    with col2:
+                        if st.button("🗑️", key=f"del_{tgt['id']}", help="ลบประวัติคนนี้"):
+                            delete_target_profile(tgt['id'])
+                            st.rerun()
+            else:
+                st.info("ยังไม่มีข้อมูลคนร้ายในระบบ")
+
+        with t_tab2:
+            target_files = st.file_uploader("Upload Targets (1 or more)", type=['jpg', 'png'], accept_multiple_files=True)
+            save_to_db = st.checkbox("💾 Save to Database", value=True, help="บันทึกข้อมูลหน้าตาและสีเสื้อไว้ค้นหาครั้งหน้า")
+            
+            if target_files:
+                with st.spinner("Processing New Targets..."):
+                    for t_file in target_files:
+                        # สร้างชื่อใหม่ถ้ามีช่อง Save Target
+                        target_name = st.text_input(f"ตั้งชื่อสำหรับ: {t_file.name}", value=t_file.name.split('.')[0])
+                        
+                        t_data = generate_target_data(t_file, reid_model, base_transform, aug_transform)
+                        t_data["name"] = target_name # อัปเดตชื่อ
+                        targets_db.append(t_data)
+                        
+                        # โชว์รูป
+                        c1, c2 = st.columns([1, 3])
+                        c1.image(t_data['image'], use_container_width=True)
+                        c2.caption(f"✅ {target_name}")
+
+                        # บันทึกลงฐานข้อมูลถ้าติ๊กถูก
+                        if save_to_db:
+                            if st.button(f"Save '{target_name}' to DB", key=f"btn_save_{target_name}"):
+                                save_target_profile(
+                                    name=target_name,
+                                    embeddings=t_data["embeddings"],
+                                    hists_full=t_data["hists_full"],
+                                    hists_top=t_data["hists_top"],
+                                    created_by=current_user
+                                )
+                                st.success("Saved!")
+        
+        st.success(f"Ready: {len(targets_db)} Targets Selected")
+                        
         st.divider()
         enable_email = st.checkbox("Email Report?", value=True)
         recipient_emails = []
@@ -352,21 +452,7 @@ with tab1:
         
         # ⚠️ อย่าลืมแก้ตรงนี้
         sender_email = "piyaphum1492@gmail.com" 
-        sender_password = "vhvp varc qflt ryxv" 
-
-        # Process Targets
-        targets_db = [] # เก็บข้อมูล Target ทุกคน
-        if target_files:
-            with st.spinner("Processing Targets..."):
-                for t_file in target_files:
-                    t_data = generate_target_data(t_file, reid_model, base_transform, aug_transform)
-                    targets_db.append(t_data)
-                    
-                    # โชว์รูป Target เล็กๆ ใน Sidebar
-                    c1, c2 = st.columns([1, 3])
-                    c1.image(t_data['image'], use_container_width=True)
-                    c2.caption(f"✅ {t_data['name']}")
-            st.success(f"Ready: {len(targets_db)} Targets")
+        sender_password = "vhvp varc qflt ryxv"
 
     with col_main:
         st.header("2. Video Scanning")
@@ -465,24 +551,31 @@ with tab1:
                                     if highest_score > threshold:
                                         found_count += 1
                                         
-                                        # อัปเดตยอดสรุป
+                                        # 🎨 ดึงชื่อสีเสื้อผ้าออกมา
+                                        color_name = get_dominant_color_name(person_pil)
+                                        
+                                        # อัปเดตยอดสรุป สำหรับส่งอีเมล
                                         if best_match_target not in report_summary[video_name]:
-                                            report_summary[video_name][best_match_target] = 0
-                                        report_summary[video_name][best_match_target] += 1
+                                            report_summary[video_name][best_match_target] = []
+                                        # เก็บ score กับ เวลา เข้าไปด้วย
+                                        report_summary[video_name][best_match_target].append({
+                                            "score": highest_score,
+                                            "color": color_name
+                                        })
                                         
                                         # Save Image (แยกโฟลเดอร์ตามวิดีโอ)
                                         video_result_dir = os.path.join(RESULT_DIR, video_name)
                                         os.makedirs(video_result_dir, exist_ok=True)
                                         
                                         timestamp_str = datetime.datetime.now().strftime("%H%M%S_%f")
-                                        # ตั้งชื่อไฟล์ให้รู้ว่าเจอใคร: TargetName_Time_Score.jpg
-                                        save_name = f"Found_{best_match_target}_{timestamp_str}_{highest_score:.2f}.jpg"
+                                        # ใส่สีเข้าไปในชื่อไฟล์ด้วย Found_TargetName_Color_...
+                                        save_name = f"Found_{best_match_target}_{color_name}_{timestamp_str}_{highest_score:.2f}.jpg"
                                         person_pil.save(os.path.join(video_result_dir, save_name))
                                         
                                         maintain_storage_limit()
                                         
                                         # แสดงผลหน้าเว็บ
-                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n{curr_time:.1f}s | {highest_score * 100:.0f}%")
+                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n🕒 {curr_time:.1f}s | 🎯 {highest_score * 100:.0f}%\n👕 Color: {color_name}")
 
                         cap.release()
                     except Exception as e:
@@ -496,19 +589,19 @@ with tab1:
             status_text.success("✅ All Done!")
             
             # เช็คว่าเจอใครบ้างมั้ย
-            total_found = sum([sum(v.values()) for v in report_summary.values()])
+            total_found = sum([len(v) for vid_dict in report_summary.values() for v in vid_dict.values()])
             
             # ─────────────────────────────────────────────────────────
             # 💾 บันทึก Search History ลง Database
             # วนลูปผลลัพธ์ทุกวิดีโอ และทุก target แล้วบันทึกลง DB
             # ─────────────────────────────────────────────────────────
             for vid_name, targets in report_summary.items():
-                for tgt_name, count in targets.items():
+                for tgt_name, logs in targets.items():
                     log_search(
                         username=current_user,
                         video_name=vid_name,
                         target_name=tgt_name,
-                        total_found=count
+                        total_found=len(logs)
                     )
             if total_found > 0:
                 st.toast(f"💾 บันทึกผลลัพธ์ลง Database แล้ว", icon="🗄️")
@@ -549,10 +642,16 @@ with tab2:
                     for i, img_path in enumerate(images):
                         img = Image.open(img_path)
                         fname = os.path.basename(img_path)
-                        # แกะชื่อ Target ออกจากชื่อไฟล์ (Found_TargetName_...)
-                        # สมมติชื่อไฟล์: Found_โจร.jpg_123456_0.99.jpg
-                        display_name = fname.split('_')[1] 
-                        cols[i % 5].image(img, caption=f"{display_name}", use_container_width=True)
+                        # แกะชื่อ Target และ สี ออกจากรูป (Found_TargetName_ColorName_...)
+                        parts = fname.split('_')
+                        if len(parts) >= 3:
+                            display_name = parts[1]
+                            color_name = parts[2]
+                            cols[i % 5].image(img, caption=f"🧑 {display_name}\n👕 {color_name}", use_container_width=True)
+                        else:
+                            # fallback ของเก่า
+                            display_name = parts[1] if len(parts)>1 else "Unknown"
+                            cols[i % 5].image(img, caption=f"{display_name}", use_container_width=True)
                 else:
                     st.caption("No images.")
     else:

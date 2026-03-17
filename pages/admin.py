@@ -14,6 +14,9 @@ import streamlit as st
 import yaml
 import streamlit_authenticator as stauth
 import pandas as pd
+import os
+import shutil
+import datetime
 from database import get_history, get_summary_stats
 
 st.set_page_config(page_title="Admin Panel | CCTV Search", layout="wide")
@@ -85,11 +88,18 @@ st.divider()
 # --- ตารางประวัติทั้งหมด ---
 st.subheader("📜 Search History (ทั้งหมด)")
 
-# ดึง filter option
-filter_user = st.selectbox(
-    "กรองตาม User:",
-    options=["ทั้งหมด"] + [u for u, _ in stats['top_users']]
-)
+# ดึง filter option (User & Date)
+c1, c2 = st.columns(2)
+with c1:
+    filter_user = st.selectbox(
+        "กรองตาม User:",
+        options=["ทั้งหมด"] + [u for u, _ in stats['top_users']]
+    )
+
+with c2:
+    # ย้อนหลังไป 7 วันเป็นค่า default
+    default_start = datetime.date.today() - datetime.timedelta(days=7)
+    date_range = st.date_input("ช่วงเวลา:", [default_start, datetime.date.today()])
 
 # ดึงข้อมูลจาก DB
 if filter_user == "ทั้งหมด":
@@ -100,6 +110,23 @@ else:
 if history:
     # แปลงเป็น DataFrame เพื่อแสดงเป็นตาราง
     df = pd.DataFrame(history)
+    
+    # แปลงคอลัมน์เวลาเป็น datetime เพื่อใช้เทียบ
+    df['searched_at'] = pd.to_datetime(df['searched_at'])
+    
+    # กรองวันที่
+    if len(date_range) == 2:
+        start_date, end_date = date_range
+        # ปรับ end_date ให้คลุมไปถึงสิ้นวัน 23:59:59
+        end_date = pd.to_datetime(str(end_date)) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+        start_date = pd.to_datetime(str(start_date))
+        
+        mask = (df['searched_at'] >= start_date) & (df['searched_at'] <= end_date)
+        df = df.loc[mask]
+
+    # ฟอร์แมตเวลากลับให้สวยงาม
+    df['searched_at'] = df['searched_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
     df = df.rename(columns={
         "id": "ID",
         "username": "User",
@@ -108,7 +135,54 @@ if history:
         "total_found": "พบ (ครั้ง)",
         "searched_at": "เวลา"
     })
-    st.dataframe(df, use_container_width=True, hide_index=True)
-    st.caption(f"ทั้งหมด {len(history)} รายการ")
+    
+    if not df.empty:
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption(f"ทั้งหมด {len(df)} รายการ")
+    else:
+        st.info("ไม่พบข้อมูลในช่วงเวลาที่เลือก")
 else:
     st.info("ยังไม่มีประวัติการค้นหา")
+
+st.divider()
+
+# ─────────────────────────────────────────────
+# 🧹 เครื่องมือทำความสะอาด (System Clean-up)
+# ─────────────────────────────────────────────
+st.subheader("🧹 System Clean-up")
+st.markdown("จัดการไฟล์ขยะและรูปที่ระบบเซฟไว้ เพื่อประหยัดพื้นที่ Disk")
+
+def get_dir_size(path="."):
+    total = 0
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.is_file(): total += entry.stat().st_size
+            elif entry.is_dir(): total += get_dir_size(entry.path)
+    return total
+
+RESULT_DIR = "detected_results"
+TEMP_DIR = "temp_video"
+
+try:
+    res_size = get_dir_size(RESULT_DIR) / (1024*1024) if os.path.exists(RESULT_DIR) else 0
+    tmp_size = get_dir_size(TEMP_DIR) / (1024*1024) if os.path.exists(TEMP_DIR) else 0
+except:
+    res_size, tmp_size = 0, 0
+
+c1, c2 = st.columns(2)
+c1.info(f"📁 **Results Folder:** {res_size:.2f} MB")
+c2.info(f"📂 **Temp Videos:** {tmp_size:.2f} MB")
+
+if st.button("🗑️ ล้างไฟล์ขยะทั้งหมด (Clear All Caches)", type="primary"):
+    # เคลียร์ temp_video
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
+        os.makedirs(TEMP_DIR)
+    
+    # เคลียร์ detected_results
+    if os.path.exists(RESULT_DIR):
+        shutil.rmtree(RESULT_DIR)
+        os.makedirs(RESULT_DIR)
+        
+    st.success("✅ ล้างไฟล์ทั้งหมดเรียบร้อยแล้ว ได้พื้นที่คืนแล้ว!")
+    st.rerun()
