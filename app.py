@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import tempfile
 import torch
+import torch.nn.functional as F
 import torchvision.transforms as T
 from torchvision.models import resnet50, ResNet50_Weights
 from ultralytics import YOLO
@@ -18,7 +19,8 @@ import shutil
 import yaml
 import streamlit_authenticator as stauth
 from sklearn.cluster import KMeans
-import webcolors
+from transformers import CLIPProcessor, CLIPModel
+from deepface import DeepFace
 
 # --- ใหม่: นำเข้าฟังก์ชัน Database ของเรา ---
 from database import init_db, log_search, get_history, save_target_profile, get_all_target_profiles, delete_target_profile
@@ -65,6 +67,62 @@ def load_models():
 
 detector, reid_model, base_transform, aug_transform = load_models()
 
+@st.cache_resource
+def load_clip_model():
+    """โหลดโมเดล CLIP แยกต่างหาก เพื่อไม่ให้เว็บช้าตอนเปิดครั้งแรก"""
+    from transformers import CLIPProcessor, CLIPModel
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    return model, processor
+
+# --- ใหม่: Gender Detection Functions ---
+def detect_gender(image_pil):
+    """
+    ตรวจจับเพศของบุคคลในภาพ
+    Returns: 'Male', 'Female', หรือ 'Unknown'
+    """
+    try:
+        # Convert PIL to CV2 format
+        img_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+        
+        # ใช้ DeepFace สำหรับตรวจจับเพศ
+        result = DeepFace.analyze(img_cv, actions=['gender'], enforce_detection=False)
+        
+        if isinstance(result, list) and len(result) > 0:
+            # ใช้ผลลัพธ์จากใบหน้าแรกที่ตรวจพบ
+            gender = result[0].get('gender', {})
+            # gender มีรูป {'Man': 95.23, 'Woman': 4.77}
+            # หาค่าที่มากที่สุด
+            if isinstance(gender, dict):
+                dominant_gender = max(gender.items(), key=lambda x: x[1])[0]
+                return dominant_gender
+        return 'Unknown'
+    except Exception as e:
+        # ถ้าไม่สามารถตรวจจับได้ ให้คืนค่า Unknown
+        return 'Unknown'
+
+def extract_gender_from_text(text):
+    """
+    ดึงข้อมูลเพศจากข้อความค้นหา
+    Returns: None (ไม่ระบุ), 'Male', 'Female', หรือ 'Any'
+    """
+    text_lower = text.lower()
+    
+    # ห้องแปลภาษาที่รองรับ
+    female_keywords = ['woman', 'girl', 'female', 'lady', 'ผู้หญิง', 'หญิง', 'สาว', 'สตรี']
+    male_keywords = ['man', 'boy', 'male', 'gentleman', 'ผู้ชาย', 'ชาย', 'หนุ่ม', 'ลูกชาย']
+    
+    # ตรวจสอบหญิง
+    if any(keyword in text_lower for keyword in female_keywords):
+        return 'Female'
+    
+    # ตรวจสอบชาย
+    if any(keyword in text_lower for keyword in male_keywords):
+        return 'Male'
+    
+    # ไม่ระบุเพศ
+    return None
+
 # --- 2. Helper Functions ---
 def extract_feature(image_pil, model, tf_func):
     img_tensor = tf_func(image_pil).unsqueeze(0)
@@ -72,46 +130,151 @@ def extract_feature(image_pil, model, tf_func):
         feature = model(img_tensor).flatten().numpy()
     return feature
 
+def get_text_embedding(text, model, processor):
+    inputs = processor(text=[text], return_tensors="pt", padding=True)
+    with torch.no_grad():
+        # Get text outputs
+        text_outputs = model.text_model(**inputs)
+        # Extract last hidden state and apply projection
+        last_hidden = text_outputs.last_hidden_state  # Shape: [batch_size, seq_len, hidden_size]
+        # Take the CLS token (first token)
+        cls_token = last_hidden[:, 0, :]  # Shape: [batch_size, hidden_size]
+        # Apply text projection if available
+        if hasattr(model, 'text_projection'):
+            text_embeds = model.text_projection(cls_token)
+        else:
+            text_embeds = cls_token
+    # Normalize
+    normalized = F.normalize(text_embeds, p=2, dim=-1)
+    # Ensure output is 1D numpy array
+    result = normalized.squeeze().cpu().detach().numpy()
+    return result if result.ndim == 1 else result.flatten()
+
+def get_image_embedding_clip(image_pil, model, processor):
+    inputs = processor(images=image_pil, return_tensors="pt")
+    with torch.no_grad():
+        # Get vision outputs
+        vision_outputs = model.vision_model(**inputs)
+        # Extract last hidden state and apply projection
+        last_hidden = vision_outputs.last_hidden_state  # Shape: [batch_size, num_patches, hidden_size]
+        # Take the CLS token (first token)
+        cls_token = last_hidden[:, 0, :]  # Shape: [batch_size, hidden_size]
+        # Apply vision projection if available
+        if hasattr(model, 'visual_projection'):
+            image_embeds = model.visual_projection(cls_token)
+        else:
+            image_embeds = cls_token
+    # Normalize
+    normalized = F.normalize(image_embeds, p=2, dim=-1)
+    # Ensure output is 1D numpy array
+    result = normalized.squeeze().cpu().detach().numpy()
+    return result if result.ndim == 1 else result.flatten()
+
 def get_part_histogram(image_pil, part='full'):
+    """สกัดฮิสโตแกรมสีจากส่วนต่างๆ ของตัว"""
     img_np = np.array(image_pil)
     h, w, _ = img_np.shape
-    if part == 'top': img_crop = img_np[:h//2, :]
-    elif part == 'bottom': img_crop = img_np[h//2:, :]
-    else: img_crop = img_np
+    
+    if part == 'top': 
+        # ตัดแค่ส่วนเสื้อ (25%-60% ของความสูง)
+        img_crop = img_np[int(h*0.25):int(h*0.60), :]
+    elif part == 'bottom': 
+        # ตัดแค่ส่วนกางเกง (60%-95% ของความสูง)
+        img_crop = img_np[int(h*0.60):int(h*0.95), :]
+    else: 
+        img_crop = img_np
+    
+    # แปลงเป็น HSV เพื่อให้ฮิสโตแกรมไวต่อการเปลี่ยนแปลงสี
     img_hsv = cv2.cvtColor(img_crop, cv2.COLOR_RGB2HSV)
+    # ใช้ Hue + Saturation + Value (สีเด่นมากขึ้น)
     hist = cv2.calcHist([img_hsv], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
     cv2.normalize(hist, hist)
     return hist.flatten()
 
+def extract_colors_from_text(text):
+    """ดึงชื่อสีจากข้อความคำค้นหา"""
+    colors = {
+        'white': ['white', 'ขาว'],
+        'black': ['black', 'ดำ'],
+        'red': ['red', 'แดง'],
+        'blue': ['blue', 'น้ำเงิน', 'ฟ้า'],
+        'green': ['green', 'เขียว'],
+        'yellow': ['yellow', 'เหลือง'],
+        'orange': ['orange', 'ส้ม'],
+        'purple': ['purple', 'ม่วง'],
+        'pink': ['pink', 'ชมพู'],
+        'brown': ['brown', 'น้ำตาล', 'กาแฟ'],
+        'gray': ['gray', 'grey', 'เทา'],
+        'cyan': ['cyan', 'ฟ้าอ่อน']
+    }
+    
+    found_colors = []
+    text_lower = text.lower()
+    
+    for color_name, color_variations in colors.items():
+        for variation in color_variations:
+            if variation in text_lower:
+                found_colors.append(color_name)
+                break
+    
+    return found_colors
+
 def closest_color(requested_color):
     """หาชื่อสีที่ใกล้เคียงที่สุดจาก RGB"""
-    min_colors = {}
-    for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
-        r_c, g_c, b_c = webcolors.hex_to_rgb(key)
-        rd = (r_c - requested_color[0]) ** 2
-        gd = (g_c - requested_color[1]) ** 2
-        bd = (b_c - requested_color[2]) ** 2
-        min_colors[(rd + gd + bd)] = name
-    return min_colors[min(min_colors.keys())]
+    try:
+        r, g, b = int(requested_color[0]), int(requested_color[1]), int(requested_color[2])
+        # ตัวกรองพื้นฐาน: ตรวจสอบสีที่ชัดเจน
+        if r > 200 and g > 200 and b > 200: return "white"
+        if r < 50 and g < 50 and b < 50: return "black"
+        if r > g + 30 and r > b + 30: return "red"
+        if g > r + 30 and g > b + 30: return "green"
+        if b > r + 30 and b > g + 30: return "blue"
+        if r > 150 and g > 70 and b < 50: return "orange"
+        if r > 150 and g > 150 and b < 50: return "yellow"
+        if r > 100 and g < 100 and b > 100: return "purple"
+        if r > 150 and g < 150 and b > 150: return "pink"
+        if r < 100 and g > 100 and b > 100: return "cyan"
+        if r > 100 and g > 100 and b < 100: return "brown"
+        if (r + g + b) // 3 > 150: return "gray"
+        return "unknown"
+    except:
+        return "unknown"
 
 def get_dominant_color_name(image_pil):
     """สกัดสีเด่นจากเสื้อผ้า (ครึ่งบนของภาพ)"""
     try:
         img_np = np.array(image_pil)
-        h, w, _ = img_np.shape
-        # ตัดเอาแค่ 40% ด้านบน (ช่วงหน้าอก-ไหล่ ไม่เอาหน้า)
-        top_crop = img_np[int(h*0.15):int(h*0.5), :]
+        h, w, c = img_np.shape
+        
+        # ตัดเอา 30%-60% ด้านบน (ช่วงเสื้อ ไม่รวมหน้า)
+        top_start = int(h * 0.25)
+        top_end = int(h * 0.65)
+        top_crop = img_np[top_start:top_end, :]
+        
+        if top_crop.size == 0:
+            return "Unknown"
         
         # Reshape สำหรับ KMeans
-        pixels = top_crop.reshape(-1, 3)
+        pixels = top_crop.reshape(-1, 3).astype(np.float32)
         
-        # รัน KMeans หา 2 สีหลัก
-        kmeans = KMeans(n_clusters=2, n_init=10, random_state=42)
-        kmeans.fit(pixels)
+        # โยนทิ้ง background (สีที่ light/dark เกินไป)
+        # คำนวณ brightness
+        brightness = np.mean(pixels, axis=1)
+        valid_mask = (brightness > 20) & (brightness < 230)  # ไม่รวมสีขาวสุดและดำสุด
+        valid_pixels = pixels[valid_mask]
         
-        # สีที่มีพื้นที่เยอะที่สุดใน 2 สี
+        if len(valid_pixels) < 10:
+            valid_pixels = pixels  # fallback ถ้าไม่มี valid pixels
+        
+        # รัน KMeans หา 3 สีหลัก
+        n_clusters = min(3, len(np.unique(valid_pixels, axis=0)))
+        kmeans = KMeans(n_clusters=n_clusters, n_init=5, random_state=42)
+        kmeans.fit(valid_pixels)
+        
+        # สีที่มีพื้นที่เยอะที่สุด
         counts = np.bincount(kmeans.labels_)
-        dominant = kmeans.cluster_centers_[np.argmax(counts)]
+        dominant_idx = np.argmax(counts)
+        dominant = kmeans.cluster_centers_[dominant_idx]
         
         # แปลง RGB เป็นชื่อสี
         color_name = closest_color([int(dominant[0]), int(dominant[1]), int(dominant[2])])
@@ -189,7 +352,8 @@ def send_email_report(summary_dict, recipient_emails, sender_email, sender_passw
                 count = len(logs)
                 # ดึงสีเสื้อมาโชว์ในเมลด้วย (สุ่มมาสักสีหรือเอาสีแรก)
                 color = logs[0]["color"] if logs else "Unknown"
-                report_html += f"<li>⚠️ พบ <b>{target_name}</b> จำนวน <b>{count}</b> ครั้ง (👕 สีที่ใส่: {color})</li>"
+                gender = logs[0]["gender"] if logs and "gender" in logs[0] else "Unknown"
+                report_html += f"<li>⚠️ พบ <b>{target_name}</b> จำนวน <b>{count}</b> ครั้ง (👕 สี: {color}, 👥 เพศ: {gender})</li>"
             report_html += "</ul><hr>"
 
         html_body = f"""
@@ -278,8 +442,21 @@ st.markdown("""
         
         /* Sidebar */
         [data-testid="stSidebar"] {
-            background-color: #ffffff;
-            border-right: 1px solid #e0e0e0;
+            background-color: #0b1f1f; /* เขียวเข้มจัด (เกือบดำ) ให้เข้ากับพื้นหลัง Dashboard */
+            border-right: 1px solid #143635; /* สีขอบเขียวเข้ม */
+        }
+        
+        /* เปลี่ยนสีตัวอักษรใน Sidebar ให้สว่างขึ้น */
+        [data-testid="stSidebar"] p, 
+        [data-testid="stSidebar"] div, 
+        [data-testid="stSidebar"] span, 
+        [data-testid="stSidebar"] label {
+            color: #e0f2f1 !important; 
+        }
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3 {
+            color: var(--ku-fresh-green) !important;
         }
         
         /* Buttons */
@@ -395,6 +572,7 @@ with tab1:
                             # ถ้าติ๊กเลือก ให้แปลงกลับเป็นรูปแบบที่ระบบ search เข้าใจ
                             targets_db.append({
                                 "name": tgt["name"],
+                                "type": "image",
                                 "image": None, # รูปไม่มีเพราะโหลดจาก DB คืน
                                 "embeddings": tgt["embeddings"],
                                 "hists_full": tgt["hists_full"],
@@ -419,6 +597,7 @@ with tab1:
                         
                         t_data = generate_target_data(t_file, reid_model, base_transform, aug_transform)
                         t_data["name"] = target_name # อัปเดตชื่อ
+                        t_data["type"] = "image"
                         targets_db.append(t_data)
                         
                         # โชว์รูป
@@ -437,7 +616,7 @@ with tab1:
                                     created_by=current_user
                                 )
                                 st.success("Saved!")
-        
+                                
         st.success(f"Ready: {len(targets_db)} Targets Selected")
                         
         st.divider()
@@ -459,9 +638,11 @@ with tab1:
         video_files = st.file_uploader("Upload CCTV Videos", type=['mp4', 'avi'], accept_multiple_files=True)
         
         c1, c2, c3 = st.columns(3)
-        threshold = c1.slider("Threshold", 0.0, 1.0, 0.70)
-        shirt_strictness = c2.slider("Shirt Strictness", 0.0, 1.0, 0.6)
-        snapshot_interval = c3.slider("Snapshot (sec)", 0.5, 5.0, 1.0) 
+        threshold = c1.slider("Match Similarity %", 0.0, 1.0, 0.70, help="เกณฑ์ความคล้ายคลึง (ยิ่งสูงยิ่งต้องเหมือนกันเป๊ะ) แนะนำ 0.70")
+        shirt_strictness = c2.slider("Shirt Color Weight", 0.0, 1.0, 0.6, help="ความห่วงสีเสื้อ (0 = ไม่สนสีเสื้อ, 1 = สีเสื้อต้องเป๊ะ) แนะนำ 0.60")
+        snapshot_interval = c3.slider("Snapshot (s)", 0.5, 5.0, 1.0, help="ความถี่ในการดึงภาพมาตรวจ (ค่าน้อย = ละเอียดแต่ช้า)")
+        
+        st.markdown("💡 **วิธีการทำงาน:** ระบบจะนำเอารูปภาพ Target ที่คุณอัปโหลด ไปเทียบเคียงกับใบหน้าและตัวบุคคลทั้งหมดในวิดีโอ โดยใช้ AI ตรวจจับลักษณะหน้าตาและสีเสื้อผ้า", unsafe_allow_html=True) 
 
         if st.button("Start Multi-Search", type="primary") and video_files and targets_db:
             
@@ -524,6 +705,9 @@ with tab1:
                                     if person_crop.size == 0: continue
                                     person_pil = Image.fromarray(cv2.cvtColor(person_crop, cv2.COLOR_BGR2RGB))
                                     
+                                    # ตรวจจับเพศครั้งเดียวสำหรับคนนี้
+                                    detected_gender_person = detect_gender(person_pil)
+                                    
                                     curr_emb = extract_feature(person_pil, reid_model, base_transform)
                                     curr_hist_full = get_part_histogram(person_pil, 'full')
                                     curr_hist_top = get_part_histogram(person_pil, 'top')
@@ -531,6 +715,7 @@ with tab1:
                                     # --- Multi-Target Matching Logic ---
                                     best_match_target = None
                                     highest_score = 0.0
+                                    best_match_type = 'image'
                                     
                                     # วนลูปเทียบกับ Target ทุกคน
                                     for t_data in targets_db:
@@ -540,15 +725,22 @@ with tab1:
                                             full_score = max(0, cv2.compareHist(t_full, curr_hist_full, cv2.HISTCMP_CORREL))
                                             shirt_score = max(0, cv2.compareHist(t_top, curr_hist_top, cv2.HISTCMP_CORREL))
                                             
-                                            total = (ai_score * 0.5) + ((full_score*0.4 + shirt_score*0.6) * 0.5)
-                                            if shirt_score < 0.5: total -= (shirt_strictness * 0.5)
+                                            # สูตร: AI 50% + Color History 50% (แยก full + shirt)
+                                            total = (ai_score * 0.5) + ((full_score*0.35 + shirt_score*0.65) * 0.5)
+                                            
+                                            # ใช้ shirt_strictness เพื่อลงโทษเมื่อสีไม่ตรง
+                                            if shirt_strictness > 0.3 and shirt_score < 0.4:
+                                                total -= (shirt_strictness * 0.3)
                                             
                                             if total > highest_score:
                                                 highest_score = total
-                                                best_match_target = t_data['name'] # จำชื่อคนที่มีคะแนนสูงสุด
+                                                best_match_target = t_data['name']
+                                                best_match_type = 'image'
                                     
-                                    # ถ้าคะแนนสูงสุด ผ่านเกณฑ์
-                                    if highest_score > threshold:
+                                    # Check if score passes threshold
+                                    passed_threshold = best_match_target and highest_score > threshold
+                                            
+                                    if passed_threshold:
                                         found_count += 1
                                         
                                         # 🎨 ดึงชื่อสีเสื้อผ้าออกมา
@@ -557,10 +749,11 @@ with tab1:
                                         # อัปเดตยอดสรุป สำหรับส่งอีเมล
                                         if best_match_target not in report_summary[video_name]:
                                             report_summary[video_name][best_match_target] = []
-                                        # เก็บ score กับ เวลา เข้าไปด้วย
+                                        # เก็บ score, เวลา, สี, และเพศเข้าไปด้วย
                                         report_summary[video_name][best_match_target].append({
                                             "score": highest_score,
-                                            "color": color_name
+                                            "color": color_name,
+                                            "gender": detected_gender_person
                                         })
                                         
                                         # Save Image (แยกโฟลเดอร์ตามวิดีโอ)
@@ -575,7 +768,7 @@ with tab1:
                                         maintain_storage_limit()
                                         
                                         # แสดงผลหน้าเว็บ
-                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n🕒 {curr_time:.1f}s | 🎯 {highest_score * 100:.0f}%\n👕 Color: {color_name}")
+                                        cols[found_count % 3].image(person_pil, caption=f"{best_match_target}\n🕒 {curr_time:.1f}s | 🎯 {highest_score * 100:.0f}%\n👕 Color: {color_name} | 👥 {detected_gender_person}")
 
                         cap.release()
                     except Exception as e:

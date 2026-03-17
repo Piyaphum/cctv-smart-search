@@ -11,3 +11,9 @@ Pillow
 streamlit-authenticator==0.3.3
 PyYAML
 bcrypt
+
+# --- ใหม่: ระบบ Text-to-Image Search (CLIP) ---
+transformers
+
+# --- ใหม่: Gender Detection ---
+deepface
