@@ -14,7 +14,6 @@
 - [🔐 ความปลอดภัย](#ความปลอดภัย)
 - [📱 ฟีเจอร์พิเศษ](#ฟีเจอร์พิเศษ)
 - [🐛 Troubleshooting](#troubleshooting)
-- [📸 Screenshot](#screenshot)
 
 ---
 
