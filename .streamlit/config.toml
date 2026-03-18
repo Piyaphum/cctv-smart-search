@@ -1,0 +1,17 @@
+[theme]
+primaryColor = "#FF2B2B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+
+[logger]
+level = "error"
+
+[server]
+headless = true
+runOnSave = true
+
