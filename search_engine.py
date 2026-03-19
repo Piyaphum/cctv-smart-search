@@ -3,10 +3,10 @@ Search Engine - Core search logic
 """
 import cv2
 import numpy as np
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import cosine #ใช้ cosine distance ในการคำนวณความคล้ายคลึงของ embedding
 
 
-def calculate_similarity(emb1, emb2):
+def calculate_similarity(emb1, emb2): #เอาไว้คำนวณความคล้ายคลึงของ embedding
     """
     Calculate similarity between two embeddings
     Returns: similarity score (0-1, higher is more similar)
