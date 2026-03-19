@@ -34,16 +34,18 @@ def process_video_frame(frame, detector, reid_model, transform, target, threshol
     return detections
 
 
-def create_result_directory(video_name):
-    """Create directory for video results"""
-    video_dir = os.path.join(RESULT_DIR, video_name)
+def create_result_directory(video_name, username="general"):
+    """Create directory for video results with user separation"""
+    user_dir = os.path.join(RESULT_DIR, username)
+    video_dir = os.path.join(user_dir, video_name)
     os.makedirs(video_dir, exist_ok=True)
     return video_dir
 
 
-def save_detection_image(frame, target_name, color, gender, video_dir, timestamp):
-    """Save detected person image"""
-    filename = f"Found_{target_name}_{color}_{gender}_{timestamp}.jpg"
+def save_detection_image(frame, target_name, color, gender, video_dir, timestamp, accuracy=0):
+    """Save detected person image with accuracy"""
+    accuracy_str = f"{accuracy:.1f}%" if accuracy > 0 else "N/A"
+    filename = f"Found_{target_name}_{color}_{gender}_{accuracy_str}_{timestamp}.jpg"
     filepath = os.path.join(video_dir, filename)
     cv2.imwrite(filepath, frame)
     return filename

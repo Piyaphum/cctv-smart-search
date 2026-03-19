@@ -14,7 +14,6 @@
 - [🔐 ความปลอดภัย](#ความปลอดภัย)
 - [📱 ฟีเจอร์พิเศษ](#ฟีเจอร์พิเศษ)
 - [🐛 Troubleshooting](#troubleshooting)
-- [📸 Screenshot](#screenshot)
 
 ---
 
@@ -375,9 +374,9 @@ K-Means Clustering:
 
 ## 📞 ติดต่อ & Support
 
-- 📧 Email: piyaphum@example.com
+- 📧 Email: piyaphum.m@ku.th
 - 🐛 Issues: GitHub Issues
-- 📱 Line: @piyaphum
+- 📱 Line: @acrylic321
 
 ---
 
@@ -390,7 +389,4 @@ K-Means Clustering:
 ⚠️ ไม่ส่งเสริมการใช้ในวัตถุประสงค์ที่ผิดกฎหมาย
 ```
 
----
-
-**Last Updated:** 2026-03-18 🚀
-
+---**Last Updated:** 2026-03-18

@@ -149,8 +149,11 @@ st.divider()
 # ─────────────────────────────────────────────
 # 🧹 เครื่องมือทำความสะอาด (System Clean-up)
 # ─────────────────────────────────────────────
-st.subheader("🧹 System Clean-up")
-st.markdown("จัดการไฟล์ขยะและรูปที่ระบบเซฟไว้ เพื่อประหยัดพื้นที่ Disk")
+st.subheader("🧹 System Clean-up (Admin Only)")
+st.markdown("""
+**Note:** Admins can clear the entire system cache. 
+Regular users can clear their personal cache from the main page.
+""")
 
 def get_dir_size(path="."):
     total = 0
@@ -170,10 +173,10 @@ except:
     res_size, tmp_size = 0, 0
 
 c1, c2 = st.columns(2)
-c1.info(f"📁 **Results Folder:** {res_size:.2f} MB")
+c1.info(f"📁 **Results Folder (All Users):** {res_size:.2f} MB")
 c2.info(f"📂 **Temp Videos:** {tmp_size:.2f} MB")
 
-if st.button("🗑️ ล้างไฟล์ขยะทั้งหมด (Clear All Caches)", type="primary"):
+if st.button("🗑️ Clear ALL System Caches", type="primary"):
     # เคลียร์ temp_video
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
@@ -184,5 +187,5 @@ if st.button("🗑️ ล้างไฟล์ขยะทั้งหมด (Cl
         shutil.rmtree(RESULT_DIR)
         os.makedirs(RESULT_DIR)
         
-    st.success("✅ ล้างไฟล์ทั้งหมดเรียบร้อยแล้ว ได้พื้นที่คืนแล้ว!")
+    st.success("✅ All system caches cleared successfully!")
     st.rerun()

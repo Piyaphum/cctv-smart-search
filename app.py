@@ -4,9 +4,11 @@ Clean Architecture - Default Streamlit Theme
 """
 import streamlit as st
 import os
+import shutil
 import cv2
 from PIL import Image
 import glob
+from deepface import DeepFace
 
 # ===== Import Modules =====
 from config import RESULT_DIR, TEMP_DIR, DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_COLOR_STRICTNESS, DEFAULT_SNAPSHOT_INTERVAL
@@ -73,6 +75,46 @@ with st.sidebar:
     st.session_state.language = lang_options[selected_lang]
     
     authenticator.logout(get_text('logout', st.session_state.language), 'sidebar')
+    st.divider()
+    
+    # Personal cache management
+    st.markdown("### 🧹 " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
+    
+    def get_user_cache_size():
+        """Get cache size for current user"""
+        user_cache_dir = os.path.join(RESULT_DIR, current_user)
+        if not os.path.exists(user_cache_dir):
+            return 0
+        total = 0
+        try:
+            for root, dirs, files in os.walk(user_cache_dir):
+                for file in files:
+                    total += os.path.getsize(os.path.join(root, file))
+        except:
+            pass
+        return total / (1024 * 1024)  # Convert to MB
+    
+    cache_size = get_user_cache_size()
+    st.info(f"📊 {cache_size:.2f} MB" if st.session_state.language == 'en' else f"📊 {cache_size:.2f} MB")
+    
+    if st.button(
+        "🗑️ Clear My Cache" if st.session_state.language == 'en' else "🗑️ ล้างแคชของฉัน",
+        type="secondary",
+        use_container_width=True
+    ):
+        user_cache_dir = os.path.join(RESULT_DIR, current_user)
+        if os.path.exists(user_cache_dir):
+            try:
+                import shutil
+                shutil.rmtree(user_cache_dir)
+                os.makedirs(user_cache_dir)
+                st.success("✅ Cache cleared!" if st.session_state.language == 'en' else "✅ ล้างแคชเรียบร้อยแล้ว!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+        else:
+            st.info("No cache to clear" if st.session_state.language == 'en' else "ไม่มีแคชให้ล้าง")
+    
     st.divider()
 
 # Load models once
@@ -202,7 +244,148 @@ with tab1:
             if not video_files or not targets_db:
                 st.error(get_text('error_please_upload', lang))
             else:
-                st.info("Feature coming soon...")
+                from search_engine import batch_match_targets
+                from feature_extraction import extract_embedding, get_part_histogram, get_dominant_color_name
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                results_container = st.empty()
+                
+                total_detections = 0
+                total_matches = 0
+                email_summary = {}  # Track matches for email
+                
+                for video_file in video_files:
+                    video_name = video_file.name.split('.')[0]
+                    video_bytes = video_file.read()
+                    
+                    # Save temp video
+                    temp_video_path = os.path.join(TEMP_DIR, f"{video_name}_temp.mp4")
+                    with open(temp_video_path, 'wb') as f:
+                        f.write(video_bytes)
+                    
+                    # Create result directory for this user
+                    video_result_dir = create_result_directory(video_name, current_user)
+                    email_summary[video_name] = {}
+                    
+                    try:
+                        cap = cv2.VideoCapture(temp_video_path)
+                        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        fps = cap.get(cv2.CAP_PROP_FPS)
+                        frame_interval = max(1, int(fps * interval))
+                        
+                        frame_count = 0
+                        processed_frames = 0
+                        
+                        while cap.isOpened():
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            # Process every Nth frame based on interval
+                            if frame_count % frame_interval == 0:
+                                # Detect persons in frame
+                                results = models['detector'](frame, classes=0, verbose=False)
+                                
+                                for r in results:
+                                    boxes = r.boxes
+                                    for box in boxes:
+                                        x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                                        x1, y1 = max(0, x1), max(0, y1)
+                                        x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
+                                        
+                                        if (x2 - x1) >= 10 and (y2 - y1) >= 10:
+                                            person_frame = frame[y1:y2, x1:x2]
+                                            person_img_pil = Image.fromarray(cv2.cvtColor(person_frame, cv2.COLOR_BGR2RGB))
+                                            
+                                            total_detections += 1
+                                            
+                                            # Extract features
+                                            embedding = extract_embedding(
+                                                person_img_pil,
+                                                models['reid_model'],
+                                                models['base_transform']
+                                            )
+                                            
+                                            hist = get_part_histogram(person_img_pil)
+                                            
+                                            # Try to detect gender
+                                            try:
+                                                gender_result = DeepFace.analyze(person_frame, actions=['gender'], verbose=False)
+                                                gender = gender_result[0]['gender']
+                                            except:
+                                                gender = "Unknown"
+                                            
+                                            # Match against targets
+                                            matches = batch_match_targets(
+                                                [embedding],
+                                                hist,
+                                                targets_db,
+                                                threshold=threshold,
+                                                shirt_strictness=shirt_weight
+                                            )
+                                            
+                                            if matches:
+                                                total_matches += len(matches)
+                                                for match in matches:
+                                                    color_name = get_dominant_color_name(person_img_pil)
+                                                    timestamp = f"{frame_count:06d}"
+                                                    accuracy_percent = match['similarity'] * 100
+                                                    save_detection_image(
+                                                        person_frame,
+                                                        match['target_name'],
+                                                        color_name,
+                                                        gender,
+                                                        video_result_dir,
+                                                        timestamp,
+                                                        accuracy_percent
+                                                    )
+                                                    
+                                                    # Track for email
+                                                    target_name = match['target_name']
+                                                    if target_name not in email_summary[video_name]:
+                                                        email_summary[video_name][target_name] = []
+                                                    email_summary[video_name][target_name].append({
+                                                        "color": color_name,
+                                                        "gender": gender,
+                                                        "accuracy": accuracy_percent
+                                                    })
+                            
+                            frame_count += 1
+                            processed_frames += 1
+                            progress = min(processed_frames / (total_frames // frame_interval), 1.0)
+                            progress_bar.progress(progress)
+                            status_text.text(f"🎉 Video: {video_name} | Detections: {total_detections} | Matches: {total_matches}")
+                        
+                        cap.release()
+                    
+                    except Exception as e:
+                        st.error(f"Error processing video {video_name}: {str(e)}")
+                    
+                    finally:
+                        # Clean up temp file
+                        if os.path.exists(temp_video_path):
+                            os.remove(temp_video_path)
+                
+                # Final results
+                progress_bar.progress(1.0)
+                
+                # Send email report if enabled
+                if enable_email and recipient_emails and total_matches > 0:
+                    try:
+                        success, msg = send_email_report(email_summary, recipient_emails)
+                        if success:
+                            st.info(f"📧 Email sent to {', '.join(recipient_emails)}")
+                        else:
+                            st.warning(f"Email not sent: {msg}")
+                    except Exception as e:
+                        st.warning(f"Could not send email: {str(e)}")
+                
+                if total_matches > 0:
+                    st.balloons()
+                    st.success(f"✅ Search Complete! Found {total_matches} matches in {total_detections} detections")
+                else:
+                    st.info(f"No matches found in {total_detections} detections")
 
 
 # ===== TAB 2: RESULTS =====
@@ -212,15 +395,17 @@ with tab2:
     if st.button(get_text('refresh', lang), use_container_width=True):
         st.rerun()
     
-    if os.path.exists(RESULT_DIR):
-        videos = [f for f in os.listdir(RESULT_DIR) if os.path.isdir(os.path.join(RESULT_DIR, f))]
+    user_result_dir = os.path.join(RESULT_DIR, current_user)
+    
+    if os.path.exists(user_result_dir):
+        videos = [f for f in os.listdir(user_result_dir) if os.path.isdir(os.path.join(user_result_dir, f))]
         
         if not videos:
             st.info(get_text('no_results_yet', lang))
         
         for video in videos:
             with st.expander(f"{video}", expanded=True):
-                video_dir = os.path.join(RESULT_DIR, video)
+                video_dir = os.path.join(user_result_dir, video)
                 images = sorted(
                     glob.glob(os.path.join(video_dir, "*.jpg")),
                     key=os.path.getmtime,
@@ -232,11 +417,16 @@ with tab2:
                     for i, img_path in enumerate(images):
                         img = Image.open(img_path)
                         fname = os.path.basename(img_path)
-                        parts = fname.split('_')
-                        label = parts[1] if len(parts) > 1 else fname
+                        # Parse filename: Found_targetname_color_gender_accuracy%_timestamp.jpg
+                        parts = fname.replace('.jpg', '').split('_')
+                        target_name = parts[1] if len(parts) > 1 else "Unknown"
+                        accuracy_str = parts[4] if len(parts) > 4 else "N/A"  # accuracy% is at index 4
+                        
+                        # Format display: target name + accuracy
+                        display_label = f"{target_name}\n📊 {accuracy_str}"
                         
                         cols[i % 5].image(img, use_container_width=True)
-                        cols[i % 5].caption(label)
+                        cols[i % 5].caption(display_label)
                 else:
                     st.caption(get_text('no_detected_results', lang))
     else:

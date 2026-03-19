@@ -55,11 +55,17 @@ def match_person(
             best_similarity = max(best_similarity, sim)
     
     # Check histogram similarity
-    hist_similarity_full = cv2.compareHist(
-        detected_person_hist.reshape(1, -1),
-        target_hist_full[0].reshape(1, -1),
-        cv2.HISTCMP_COSINE
-    ) if len(target_hist_full) > 0 else 0.5
+    if len(target_hist_full) > 0:
+        try:
+            # Use scipy cosine distance for histogram comparison (more reliable)
+            hist_similarity_full = 1 - cosine(
+                detected_person_hist.flatten(),
+                target_hist_full[0].flatten()
+            )
+        except:
+            hist_similarity_full = 0.5
+    else:
+        hist_similarity_full = 0.5
     
     hist_similarity = max(hist_similarity_full, 0.3)
     
