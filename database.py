@@ -8,11 +8,15 @@ from supabase import create_client, Client
 import config
 import numpy as np
 
+# Initialize Supabase client
 try:
     supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 except Exception as e:
     print(f"Failed to initialize supabase client: {e}")
     supabase = None
+
+def init_db():
+    print("✅ System adapted for Supabase Cloud Database")
 
 # ฟังก์ชั่นช่วยแปลง numpy array ไปเป็น list สำหรับ json
 def convert_to_list(obj):
@@ -20,7 +24,6 @@ def convert_to_list(obj):
         return obj.tolist()
     elif isinstance(obj, list) or isinstance(obj, tuple):
         return [convert_to_list(i) for i in obj]
-    # ในกรณีที่เป็น single float (numpy float32, etc.)
     elif hasattr(obj, 'item'): 
         return obj.item()
     return obj
@@ -38,9 +41,12 @@ def log_search(username: str, video_name: str, target_name: str, total_found: in
         "target_name": target_name,
         "total_found": total_found
     }
-    response = supabase.table("search_history").insert(data).execute()
-    if response.data:
-        return response.data[0]["id"]
+    try:
+        response = supabase.table("search_history").insert(data).execute()
+        if response.data:
+            return response.data[0]["id"]
+    except:
+        pass
     return None
 
 def log_detection(search_id: str, score: float, timestamp_s: float):
@@ -51,7 +57,10 @@ def log_detection(search_id: str, score: float, timestamp_s: float):
         "score": float(score),
         "timestamp_s": float(timestamp_s)
     }
-    supabase.table("detections").insert(data).execute()
+    try:
+        supabase.table("detections").insert(data).execute()
+    except:
+        pass
 
 def save_target_profile(name: str, embeddings: list, hists_full: list, hists_top: list, created_by: str) -> str:
     """บันทึก Target ที่ประมวลผล AI เสร็จแล้วลง Cloud Database"""
@@ -63,9 +72,12 @@ def save_target_profile(name: str, embeddings: list, hists_full: list, hists_top
         "hists_top": convert_to_list(hists_top),
         "created_by": created_by
     }
-    response = supabase.table("target_profiles").insert(data).execute()
-    if response.data:
-        return response.data[0]["id"]
+    try:
+        response = supabase.table("target_profiles").insert(data).execute()
+        if response.data:
+            return response.data[0]["id"]
+    except:
+        pass
     return None
 
 # ─────────────────────────────────────────────
@@ -112,7 +124,7 @@ def get_summary_stats() -> dict:
         return {"total_searches": 0, "total_detected": 0, "top_users": []}
 
 def get_all_target_profiles() -> list:
-    """โหลด Target Profiles ทั้งหมดที่บันทึกไว้ และทำการแปลง List กลับมาเป็น Numpy array เพื่อให้โมเดลคำนวณได้"""
+    """โหลด Target Profiles ทั้งหมดที่บันทึกไว้"""
     if supabase is None: return []
     try:
         response = supabase.table("target_profiles").select("id, name, embeddings, hists_full, hists_top, created_by, created_at").order("created_at", desc=True).execute()
@@ -141,6 +153,3 @@ def delete_target_profile(profile_id: str):
         supabase.table("target_profiles").delete().eq("id", profile_id).execute()
     except Exception as e:
         pass
-
-def init_db():
-    print("✅ System adapted for Supabase Cloud Database")

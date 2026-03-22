@@ -50,9 +50,8 @@ def load_clip_model():
         model = CLIPModel.from_pretrained(CLIP_MODEL)
         processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
         return model, processor
-    except Exception as e:
-        import streamlit as st
-        st.warning(f"⚠️ Could not load CLIP model: {str(e)}")
+    except Exception:
+        # Silenced warning as requested by user
         return None, None
 
 
