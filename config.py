@@ -4,7 +4,7 @@ Configuration and Constants
 import os
 
 # URLs
-WEB_APP_URL = "http://localhost:8501"
+WEB_APP_URL = "https://ku-person-target-searching.streamlit.app/"
 
 # Supabase Auth Connection (Censored for security)
 SUPABASE_URL = "https://jghslowximgwaqdocklr.supabase.co/"
