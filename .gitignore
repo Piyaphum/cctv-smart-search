@@ -4,5 +4,6 @@ __pycache__/
 *.mov
 temp_video/
 videos/
+detected_results/
 cctv_logs.db
 .env

@@ -136,8 +136,15 @@ if history:
     # ฟอร์แมตเวลากลับให้สวยงาม
     df['searched_at'] = df['searched_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
+    if 'id' in df.columns:
+        df = df.drop(columns=['id'])
+        
+    if not df.empty:
+        df.insert(0, 'ID', range(1, len(df) + 1))
+    else:
+        df['ID'] = pd.Series([], dtype=int)
+
     df = df.rename(columns={
-        "id": "ID",
         "username": "User",
         "video_name": "วิดีโอ",
         "target_name": "Target",

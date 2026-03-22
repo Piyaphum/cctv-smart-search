@@ -509,17 +509,30 @@ with tab1:
                             
                             # Process every Nth frame based on interval
                             if frame_count % frame_interval == 0:
-                                # Detect persons in frame
-                                results = models['detector'](frame, classes=0, verbose=False)
+                                # Detect persons in frame with lower confidence threshold
+                                results = models['detector'](frame, classes=0, conf=0.3, verbose=False)
+                                
+                                # If no detections with 0.3 confidence, try with lower threshold
+                                if not results or len(results) == 0:
+                                    results = models['detector'](frame, classes=0, conf=0.15, verbose=False)
                                 
                                 for r in results:
                                     boxes = r.boxes
+                                    if boxes is None or len(boxes) == 0:
+                                        continue
+                                    
                                     for box in boxes:
-                                        x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
+                                        try:
+                                            # Extract and convert coordinates properly
+                                            coords = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy, 'cpu') else box.xyxy[0]
+                                            x1, y1, x2, y2 = map(int, coords)
+                                        except (IndexError, AttributeError, TypeError):
+                                            continue
                                         x1, y1 = max(0, x1), max(0, y1)
                                         x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
                                         
-                                        if (x2 - x1) >= 10 and (y2 - y1) >= 10:
+                                        # Reduced minimum size to catch more detections (was 10x10, now 5x5)
+                                        if (x2 - x1) >= 5 and (y2 - y1) >= 5:
                                             person_frame = frame[y1:y2, x1:x2]
                                             person_img_pil = Image.fromarray(cv2.cvtColor(person_frame, cv2.COLOR_BGR2RGB))
                                             

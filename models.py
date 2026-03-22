@@ -45,10 +45,15 @@ def load_transforms():
 
 @st.cache_resource
 def load_clip_model():
-    """Load CLIP model for text-to-image search"""
-    model = CLIPModel.from_pretrained(CLIP_MODEL)
-    processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
-    return model, processor
+    """Load CLIP model for text-to-image search - lazy loaded with fallback"""
+    try:
+        model = CLIPModel.from_pretrained(CLIP_MODEL)
+        processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
+        return model, processor
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"⚠️ Could not load CLIP model: {str(e)}")
+        return None, None
 
 
 def get_all_models():
@@ -56,7 +61,12 @@ def get_all_models():
     detector = load_detection_model()
     reid_model = load_reid_model()
     base_tf, aug_tf = load_transforms()
-    clip_model, clip_processor = load_clip_model()
+    
+    # CLIP model is optional - load with error handling
+    try:
+        clip_model, clip_processor = load_clip_model()
+    except Exception:
+        clip_model, clip_processor = None, None
     
     return {
         'detector': detector,
