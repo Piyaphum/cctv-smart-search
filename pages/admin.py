@@ -120,6 +120,8 @@ if history:
     
     # แปลงคอลัมน์เวลาเป็น datetime เพื่อใช้เทียบ
     df['searched_at'] = pd.to_datetime(df['searched_at'])
+    if df['searched_at'].dt.tz is not None:
+        df['searched_at'] = df['searched_at'].dt.tz_localize(None)
     
     # กรองวันที่
     if len(date_range) == 2:
@@ -263,6 +265,37 @@ with t_manage:
                 st.rerun()
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: {e}")
+
+    st.markdown("---")
+    st.markdown("**🔑 Change User Password (เปลี่ยนรหัสผ่านผู้ใช้)**")
+    
+    with st.form("admin_change_password_form"):
+        available_users = df_users["Username"].tolist() if not df_users.empty else []
+        target_user = st.selectbox("เลือกผู้ใช้:", options=[""] + available_users)
+        new_pass = st.text_input("รหัสผ่านใหม่ (New Password)", type="password", help="อย่างน้อย 8 ตัวอักษร")
+        new_pass_confirm = st.text_input("ยืนยันรหัสผ่านใหม่ (Confirm Password)", type="password")
+        
+        if st.form_submit_button("🔥 Update Password", type="primary"):
+            if not target_user:
+                st.warning("กรุณาเลือกผู้ใช้")
+            elif len(new_pass) < 8:
+                st.error("รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร")
+            elif new_pass != new_pass_confirm:
+                st.error("รหัสผ่านไม่ตรงกัน")
+            else:
+                try:
+                    hashed_pw = stauth.Hasher([new_pass]).generate()[0]
+                    if supabase:
+                        supabase.table('users').update({'password_hash': hashed_pw}).eq('username', target_user).execute()
+                        st.success(f"✅ เปลี่ยนรหัสผ่านสำหรับ {target_user} บน Cloud สำเร็จ!")
+                        
+                    # อัปเดตไฟล์ Local เผื่อไว้
+                    if target_user in auth_config['credentials']['usernames']:
+                        auth_config['credentials']['usernames'][target_user]['password'] = hashed_pw
+                        with open('auth_config.yaml', 'w', encoding='utf-8') as f:
+                            yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาด: {e}")
 
     st.markdown("---")
     st.markdown("**🗑️ Delete User (ลบผู้ใช้)**")

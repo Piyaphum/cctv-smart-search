@@ -587,6 +587,21 @@ with tab1:
                         # Clean up temp file
                         if os.path.exists(temp_video_path):
                             os.remove(temp_video_path)
+                        
+                        # === LOG SEARCH HISTORY ===
+                        try:
+                            from database import log_search
+                            for t in targets_db:
+                                t_name = t['name']
+                                t_found = len(email_summary.get(video_name, {}).get(t_name, []))
+                                log_search(
+                                    username=current_user,
+                                    video_name=video_name,
+                                    target_name=t_name,
+                                    total_found=t_found
+                                )
+                        except Exception as db_err:
+                            st.warning(f"Could not save search history: {str(db_err)}")
                 
                 # Final results
                 progress_bar.progress(1.0)
