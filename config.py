@@ -20,7 +20,7 @@ DEFAULT_SNAPSHOT_INTERVAL = 1.0
 
 # Email Config
 SENDER_EMAIL = "piyaphum1492@gmail.com"
-SENDER_PASSWORD = "vhvp varc qflt ryxv"
+SENDER_PASSWORD = "your app gmail pass"
 
 # Model Paths
 YOLO_MODEL = 'yolov8n.pt'
