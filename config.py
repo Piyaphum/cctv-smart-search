@@ -11,7 +11,8 @@ SUPABASE_URL = "https://jghslowximgwaqdocklr.supabase.co/"
 SUPABASE_KEY = "sb_publishable_PFpZlGsNzH6rMrwjRIlQkw_3Q7ISRz-"
 # Directories
 RESULT_DIR = "detected_results"
-TEMP_DIR = "D:\\person-reid\\temp_video"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMP_DIR = os.path.join(BASE_DIR, "temp_video")
 os.makedirs(RESULT_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
