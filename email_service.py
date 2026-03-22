@@ -6,8 +6,19 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import SENDER_EMAIL, SENDER_PASSWORD, WEB_APP_URL
 
+def get_email_credentials():
+    try:
+        import yaml
+        with open('settings.yaml', 'r', encoding='utf-8') as f:
+            sys_settings = yaml.safe_load(f)
+        # Use settings if found and not empty, otherwise fallback to config
+        email = sys_settings.get("SENDER_EMAIL", "").strip() or SENDER_EMAIL
+        password = sys_settings.get("SENDER_PASSWORD", "").strip() or SENDER_PASSWORD
+        return email, password
+    except:
+        return SENDER_EMAIL, SENDER_PASSWORD
 
-def send_email_report(summary_dict, recipient_emails, sender_email=SENDER_EMAIL, sender_password=SENDER_PASSWORD):
+def send_email_report(summary_dict, recipient_emails):
     """
     Send email report with detection summary
     
@@ -20,6 +31,7 @@ def send_email_report(summary_dict, recipient_emails, sender_email=SENDER_EMAIL,
     Returns:
         (success, message)
     """
+    sender_email, sender_password = get_email_credentials()
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f'Detection Alert: Found Matches in {len(summary_dict)} Videos'
@@ -49,7 +61,7 @@ def send_email_report(summary_dict, recipient_emails, sender_email=SENDER_EMAIL,
                 <div style="margin-top:20px;">
                     {report_html}
                 </div>
-                <a href="{WEB_APP_URL}" style="background-color:#1dd1a1; color:#000; padding:12px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
+                <a href="{WEB_APP_URL}/?view=results" style="background-color:#1dd1a1; color:#000; padding:12px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
                     View Results
                 </a>
             </body>
@@ -67,7 +79,7 @@ def send_email_report(summary_dict, recipient_emails, sender_email=SENDER_EMAIL,
         return False, str(e)
 
 
-def send_password_reset_email(recipient_email, username, new_password, sender_email=SENDER_EMAIL, sender_password=SENDER_PASSWORD):
+def send_password_reset_email(recipient_email, username, new_password):
     """
     Send password reset email
     
@@ -75,12 +87,11 @@ def send_password_reset_email(recipient_email, username, new_password, sender_em
         recipient_email: user's registered email
         username: user's username
         new_password: newly generated password
-        sender_email: sender email
-        sender_password: sender password
         
     Returns:
         (success, message)
     """
+    sender_email, sender_password = get_email_credentials()
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Password Reset Completed'
@@ -112,10 +123,11 @@ def send_password_reset_email(recipient_email, username, new_password, sender_em
         return False, str(e)
 
 
-def send_verification_code_email(recipient_email, username, verification_code, sender_email=SENDER_EMAIL, sender_password=SENDER_PASSWORD):
+def send_verification_code_email(recipient_email, username, verification_code):
     """
     Send a 6-digit OTP verification code for password reset
     """
+    sender_email, sender_password = get_email_credentials()
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Password Reset Verification Code'

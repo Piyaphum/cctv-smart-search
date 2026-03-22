@@ -249,6 +249,48 @@ with st.sidebar:
     
     authenticator.logout(get_text('logout', st.session_state.language), 'sidebar')
     st.divider()
+
+    # --- System Config (Moved from Admin Panel) ---
+    with st.expander("ตั้งค่า Email"):
+        st.markdown("**ตั้งค่าอีเมลส่งแจ้งเตือน**")
+        st.caption("ระบบใช้อีเมลนี้ส่งรหัส OTP และแจ้งเตือน")
+        
+        with st.popover("📖 คู่มือขอรหัสผ่านแอป Gmail"):
+            st.markdown("""
+            **วิธีสร้างรหัส App Password:**
+            1. ไปที่บัญชี Google > **ความปลอดภัย (Security)**
+            2. เปิดใช้งาน **การยืนยันแบบ 2 ขั้นตอน (2-Step Verification)**
+            3. ค้นหาเมนู **"App Passwords"**
+            4. กรอกชื่อแอป แล้วกดสร้าง
+            5. นำรหัส 16 ตัวมากรอก
+            """)
+            
+        try:
+            import yaml
+            with open('settings.yaml', 'r', encoding='utf-8') as f:
+                sys_settings = yaml.safe_load(f)
+        except Exception:
+            sys_settings = {}
+            
+        curr_email = sys_settings.get("SENDER_EMAIL", "")
+        
+        with st.form("sys_email_form"):
+            sys_email = st.text_input("Sender Email", value=curr_email)
+            sys_pass = st.text_input("App Password", type="password")
+            
+            if st.form_submit_button("💾 Save Settings", type="primary"):
+                sys_settings["SENDER_EMAIL"] = sys_email.strip()
+                if sys_pass.strip():  
+                    sys_settings["SENDER_PASSWORD"] = sys_pass.strip().replace(" ", "")
+                try:
+                    import yaml
+                    with open('settings.yaml', 'w', encoding='utf-8') as f:
+                        yaml.dump(sys_settings, f, default_flow_style=False)
+                    st.success("✅ บันทึกสำเร็จ!")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    st.divider()
     
     # Personal cache management
     st.markdown("### 🧹 " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
@@ -302,7 +344,12 @@ st.markdown(f"<p style='color:#a0aec0;'>{get_text('subtitle', lang)}</p>", unsaf
 current_role = auth_config['credentials']['usernames'].get(current_user, {}).get('role', 'viewer')
 
 # ===== Tabs =====
-tab1, tab2 = st.tabs([get_text('search', lang), get_text('results', lang)])
+view_param = st.query_params.get("view", "")
+
+if view_param == "results":
+    tab2, tab1 = st.tabs([get_text('results', lang), get_text('search', lang)])
+else:
+    tab1, tab2 = st.tabs([get_text('search', lang), get_text('results', lang)])
 
 # ===== TAB 1: SEARCH =====
 with tab1:
