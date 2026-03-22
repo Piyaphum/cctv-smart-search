@@ -18,3 +18,4 @@ transformers
 # --- ใหม่: Gender Detection ---
 deepface
 supabase
+scikit-learn
