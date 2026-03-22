@@ -292,45 +292,47 @@ with st.sidebar:
 
     st.divider()
     
-    # Personal cache management
-    st.markdown("### 🧹 " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
-    
-    def get_user_cache_size():
-        """Get cache size for current user"""
-        user_cache_dir = os.path.join(RESULT_DIR, current_user)
-        if not os.path.exists(user_cache_dir):
-            return 0
-        total = 0
-        try:
-            for root, dirs, files in os.walk(user_cache_dir):
-                for file in files:
-                    total += os.path.getsize(os.path.join(root, file))
-        except:
-            pass
-        return total / (1024 * 1024)  # Convert to MB
-    
-    cache_size = get_user_cache_size()
-    st.info(f"📊 {cache_size:.2f} MB" if st.session_state.language == 'en' else f"📊 {cache_size:.2f} MB")
-    
-    if st.button(
-        "🗑️ Clear My Cache" if st.session_state.language == 'en' else "🗑️ ล้างแคชของฉัน",
-        type="secondary",
-        use_container_width=True
-    ):
-        user_cache_dir = os.path.join(RESULT_DIR, current_user)
-        if os.path.exists(user_cache_dir):
+    # Personal cache management (Admin only)
+    user_role = auth_config['credentials']['usernames'].get(current_user, {}).get('role', 'viewer')
+    if user_role == 'admin':
+        st.markdown("### 🧹 " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
+        
+        def get_user_cache_size():
+            """Get cache size for current user"""
+            user_cache_dir = os.path.join(RESULT_DIR, current_user)
+            if not os.path.exists(user_cache_dir):
+                return 0
+            total = 0
             try:
-                import shutil
-                shutil.rmtree(user_cache_dir)
-                os.makedirs(user_cache_dir)
-                st.success("✅ Cache cleared!" if st.session_state.language == 'en' else "✅ ล้างแคชเรียบร้อยแล้ว!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-        else:
-            st.info("No cache to clear" if st.session_state.language == 'en' else "ไม่มีแคชให้ล้าง")
-    
-    st.divider()
+                for root, dirs, files in os.walk(user_cache_dir):
+                    for file in files:
+                        total += os.path.getsize(os.path.join(root, file))
+            except:
+                pass
+            return total / (1024 * 1024)  # Convert to MB
+        
+        cache_size = get_user_cache_size()
+        st.info(f"📊 {cache_size:.2f} MB" if st.session_state.language == 'en' else f"📊 {cache_size:.2f} MB")
+        
+        if st.button(
+            "🗑️ Clear My Cache" if st.session_state.language == 'en' else "🗑️ ล้างแคชของฉัน",
+            type="secondary",
+            use_container_width=True
+        ):
+            user_cache_dir = os.path.join(RESULT_DIR, current_user)
+            if os.path.exists(user_cache_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(user_cache_dir)
+                    os.makedirs(user_cache_dir)
+                    st.success("✅ Cache cleared!" if st.session_state.language == 'en' else "✅ ล้างแคชเรียบร้อยแล้ว!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+            else:
+                st.info("No cache to clear" if st.session_state.language == 'en' else "ไม่มีแคชให้ล้าง")
+        
+        st.divider()
 
 # Load models once
 models = get_all_models()
