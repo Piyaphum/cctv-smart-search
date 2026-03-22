@@ -106,6 +106,13 @@ TRANSLATIONS = {
         "reset_fail": "เกิดข้อผิดพลาดในการส่งอีเมล",
         "username_not_found": "ไม่พบชื่อผู้ใช้นี้ในระบบ",
         
+        # Public Registration
+        "register_new_user": "สมัครสมาชิกใหม่",
+        "confirm_password": "ยืนยันรหัสผ่าน",
+        "register_button": "สมัครสมาชิก",
+        "passwords_not_match": "รหัสผ่านไม่ตรงกัน",
+        "registration_success": "✅ สมัครสมาชิกสำเร็จ! กรุณาล็อกอินด้านบน",
+        
         # User Management CRUD
         "manage_users": "จัดการผู้ใช้",
         "edit_user": "แก้ไขข้อมูลผู้ใช้",
@@ -219,6 +226,13 @@ TRANSLATIONS = {
         "reset_success": "A new password has been sent to the registered email.",
         "reset_fail": "An error occurred while sending the email.",
         "username_not_found": "Username not found in the system.",
+        
+        # Public Registration
+        "register_new_user": "Register New User",
+        "confirm_password": "Confirm Password",
+        "register_button": "Register",
+        "passwords_not_match": "Passwords do not match.",
+        "registration_success": "✅ Registration successful! Please log in above.",
         
         # User Management CRUD
         "manage_users": "Manage Users",

@@ -7,7 +7,7 @@ credentials:
     admin:
       email: piyaphum1492@gmail.com
       name: Admin
-      password: $2b$12$B9.37ThKMyGTbXut9a3tT.V8.Ga.1ze0YyPsaRCAbo3kv1ZOuDmp.
+      password: $2b$12$yWaMShrqHiQdV9zVKQQCHOO/EEzPZ4G8FqleJ3YrZs80ohxMWFzLK
       role: admin
     officer1:
       email: officer1@ku.th

@@ -1,83 +1,56 @@
-# Person Detection System - Architecture
+# System Architecture
 
-## Project Structure
+This document details the internal module structure, database schemas, and the operational data flow inside the Person Detection System.
 
-```
-d:\person-reid\
-├── app.py                    # Main application (clean, ~300 lines)
-├── config.py                 # All configuration constants
-├── models.py                 # AI models loading
-├── feature_extraction.py      # Extract embeddings, colors, gender
-├── target_management.py       # Target profile operations
-├── video_processor.py         # Video frame processing
-├── search_engine.py          # Matching logic
-├── email_service.py          # Email alerts
-├── ui_styles.py              # Dark-green theme CSS
-├── database.py               # Database operations (existing)
-├── auth_config.yaml          # Authentication config (existing)
-└── requirements.txt          # Dependencies
-```
+## Module Structure
 
-## File Responsibilities
+*   `app.py`: The root orchestrator. Renders the main Streamlit loops, hosts the public registration system, processes login authentications, and acts as the entry point for Video Uploads and Settings.
+*   `config.py`: The central registry for API endpoints, Supabase credentials, Email configs, and global search thresholds.
+*   `database.py`: The database adapter. Translates Python models, `numpy` matrices, and dictionaries dynamically into JSON-compatible arrays transmitted via the Supabase Client API.
+*   `email_service.py`: Dispatches SMTP commands to send verification OTP emails for forgotten passwords and comprehensive matched-target summaries.
+*   `feature_extraction.py`: Contains AI evaluation layers using YOLOv8, OpenAI CLIP, and DeepFace. Handles bounding box cropping and semantic mathematical transformations.
+*   `models.py`: Initializes the AI Neural Networks globally into memory cache on boot to prevent repetitive load times during inference.
+*   `video_processor.py`: Conducts the actual chronological sweeping logic of the video file. Iterates mathematically through timestamps, offloading frame data to `feature_extraction.py`, and recording hits back to `database.py`.
+*   `pages/admin.py`: Isolated protected portal strictly for users with the `admin` role. Modifies the primary Cloud configuration of system users directly.
 
-| File | Purpose |
-|------|---------|
-| `app.py` | Main Streamlit app, UI layout, orchestration |
-| `config.py` | All constants and configuration values |
-| `models.py` | Load YOLO, ResNet50, CLIP models |
-| `feature_extraction.py` | Embeddings, color analysis, gender detection |
-| `target_management.py` | Create & manage target profiles |
-| `video_processor.py` | Video frame processing & saving results |
-| `search_engine.py` | Person matching logic & similarity |
-| `email_service.py` | Send detection alerts via email |
-| `ui_styles.py` | Dark green theme styling |
-| `database.py` | SQLite operations for profiles |
+## Principles of Operation
 
-## Theme Colors
+1.  **Profile Generation:** The admin uploads an image of a Target. `feature_extraction.py` parses the photo, translating aesthetic properties (colors, dimensions) into deep mathematical vectors (embeddings) and saving them permanently to Supabase via `database.py`.
+2.  **Inference Traversal:** When a video is submitted, `video_processor.py` slices the video into interval frames. YOLO identifies humans in each image.
+3.  **Semantic Search:** Each cropped human from YOLO undergoes the same transformation by OpenAI CLIP. The system calculates the "Cosine Similarity" against the saved `target_profiles`. If the mathematical distance exceeds the User Threshold, a "Match" is registered.
+4.  **Logging and Alerting:** Matches are logged back into the Supabase Cloud. `email_service` aggregates the results into an HTML report format and sends automated dispatches to security teams.
 
-- **Primary Green**: `#1dd1a1` (bright teal)
-- **Dark Background**: `#0a0e27` (almost black)
-- **Sidebar**: `#0f1419` (dark blue-black)
-- **Cards**: `#151b28` (dark gray)
-- **Text**: `#e8eef2` (light)
-- **Muted**: `#a0aec0` (gray)
+## Database Schema (Supabase PostgreSQL)
 
-## Running the App
+The backend relational schema prioritizes flexible logging with UUID structures.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+### 1. `users` Table
+Stores authentication and credential definitions for all platform tenants.
+*   `username` (TEXT, PRIMARY KEY): The login identifier.
+*   `name` (TEXT): The full name of the user.
+*   `email` (TEXT): Critical for OTP password resets.
+*   `password_hash` (TEXT): Encrypted bcrypt strings.
+*   `role` (TEXT): Either `viewer` or `admin`.
 
-# Run streamlit app
-python -m streamlit run app.py
+### 2. `target_profiles` Table
+Stores serialized neural network definitions of target subjects.
+*   `id` (UUID, PRIMARY KEY): Generated default UUID v4.
+*   `name` (TEXT): Human-readable name of the target.
+*   `type` (TEXT): Profile type specification.
+*   `embeddings` (JSONB): Numpy arrays transformed to JSON list-float datasets.
+*   `hists_full` / `hists_top` (JSONB): Histographical array definitions for fallback color filtering.
+*   `created_by` (TEXT): Associates the creator.
 
-# Or use the launcher
-python run_app.py
-```
+### 3. `search_history` Table
+Logs broad metadata indicating an ongoing or completed sweep by a user.
+*   `id` (UUID, PRIMARY KEY): Default UUID v4.
+*   `username` (TEXT): Identifying which operator executed the search.
+*   `video_name` / `target_name` (TEXT): Context descriptions.
+*   `total_found` (INTEGER): Incrementing aggregate counter.
 
-## Building Executable
-
-```bash
-# Build .exe
-python build_exe.py
-
-# Output: dist/PersonReid.exe
-```
-
-## Key Features
-
-✅ Dark green modern theme  
-✅ Clean modular architecture  
-✅ Face recognition with ResNet50  
-✅ Object detection with YOLOv8  
-✅ CLIP for text-based search  
-✅ Saved profile database  
-✅ Email alerts on detection  
-✅ User authentication  
-
-## Development Notes
-
-- Each module is self-contained and focused on one task
-- Models are cached with `@st.cache_resource` for performance
-- All constants are in `config.py` for easy modification
-- UI theme in `ui_styles.py` for consistent styling
+### 4. `detections` Table
+Chronological children of `search_history` detailing exactly when and how accurately a human was matched.
+*   `id` (BIGINT, PRIMARY KEY): Sequential identification point.
+*   `search_id` (UUID): Foreign key linking backwards to `search_history` with cascading deletion rules.
+*   `score` (REAL): The cosine similarity float margin (0.0 to 1.0)
+*   `timestamp_s` (REAL): The sequential seconds marker inside the uploaded video referencing the match.

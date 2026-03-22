@@ -1,95 +1,50 @@
-# Person Detection System
+# Person Detection and Re-identification System
 
-ระบบค้นหาและตรวจจับบุคคลเป้าหมายในกล้องวงจรปิด (CCTV) ด้วยเทคโนโลยี AI แบบ Multi-Target ระบบนี้ถูกออกแบบมาเพื่อช่วยลดระยะเวลาในการค้นหาบุคคลในวิดีโอที่มีความยาวมาก โดยใช้การประมวลผลจาก AI ในการวิเคราะห์โครงสร้างร่างกายและเปรียบเทียบใบหน้า พร้อมระบบจัดการข้อมูลผู้ใช้งานแบบ Role-based
+This project is a comprehensive security application designed to analyze CCTV video footage and identify specific individuals using artificial intelligence. The system allows users to upload "Target Profiles" (images of people of interest) and scans provided video files to locate these individuals based on facial embeddings, clothing colors, and semantic features.
 
----
+## Origins and Purpose
 
-## สารบัญ
-- [ความสามารถของระบบ](#ความสามารถของระบบ)
-- [โครงสร้างระบบและเทคโนโลยี](#โครงสร้างระบบและเทคโนโลยี)
-- [ความต้องการของระบบ](#ความต้องการของระบบ)
-- [การติดตั้ง](#การติดตั้ง)
-- [การตั้งค่าระบบและการแจ้งเตือน](#การตั้งค่าระบบและการแจ้งเตือน)
-- [ความปลอดภัยของข้อมูล](#ความปลอดภัยของข้อมูล)
+This system was initially developed as a localized desktop application utilizing a lightweight SQLite database. As the feature set expanded to include real-time multi-tenant administration, public registration portals, and scalable search histories, the architecture was migrated to a Supabase Cloud PostgreSQL database. 
 
----
+The primary objective of this project is to automate the tedious process of manually scrubbing hours of CCTV footage. By leveraging state-of-the-art vision models (YOLOv8 and OpenAI CLIP), the application dramatically reduces search time and provides instant timestamped logs and automated email alerts.
 
-## ความสามารถของระบบ
+## Tech Stack
 
-- **การค้นหาอัตโนมัติ:** ค้นหาและตรวจจับบุคคลเป้าหมายจากวิดีโอ CCTV โดยอัตโนมัติ
-- **รองรับหลายเป้าหมาย:** สามารถกำหนดเป้าหมายการค้นหาได้หลายคนพร้อมกันในรอบเดียว
-- **การวิเคราะห์คุณลักษณะ:** ใช้หลักการเปรียบเทียบใบหน้า (Facial Embeddings) ร่วมกับการสกัดสีเสื้อผ้า (Color Extraction) เพื่อเพิ่มความแม่นยำ
-- **ระบบการจัดการผู้ใช้:** รองรับการแบ่งระดับผู้ใช้งาน (Admin และ Viewer) และให้สิทธิ์ Admin ในการจัดการบัญชีของผู้อื่นผ่านหน้าเว็บ
-- **การแจ้งเตือนอีเมล:** ระบบสามารถสรุปผลและส่งอีเมลแจ้งเตือนอัตโนมัติเมื่อพบเป้าหมาย
+*   **Frontend / UI:** Streamlit (Python). Selected for its rapid prototyping capabilities and seamless native data binding.
+*   **Authentication:** `streamlit-authenticator` integrated directly with Supabase via custom handlers.
+*   **Database:** Supabase (PostgreSQL). Utilized for `users` management, `search_history` logging, and storing heavy `target_profiles` (JSON format of deep neural network embeddings).
+*   **AI & Computer Vision:**
+    *   `ultralytics` (YOLOv8): For bounding box detection of humans within video frames.
+    *   `transformers` (OpenAI CLIP): For extracting highly-dimensional semantic embeddings from detected human crops to perform similarity matching.
+    *   `deepface`: For extracting biological profile classifications.
+    *   `opencv-python` (cv2): Standard frame extraction and image filtering.
+*   **Scientific Compute:** `numpy`, `pandas`, `scipy` for evaluating cosine similarities between multi-dimensional arrays.
 
-## โครงสร้างระบบและเทคโนโลยี
+## Installation Guide
 
-**AI & Computer Vision**
-- **YOLOv8:** ตรวจจับบุคคล (Person Detection) เพื่อหาตำแหน่งของคนในเฟรมภาพ
-- **ResNet50:** สกัดจุดเด่นของใบหน้า (Facial Feature Extraction)
-- **K-Means Clustering:** วิเคราะห์และสกัดสีเสื้อผ้าหลักที่ผู้ต้องสงสัยสวมใส่
+1.  **Clone the Repository** and navigate to the root directory.
+2.  **Install Dependencies:** Ensure you are using Python 3.9+ and pip.
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Configure Environment Variables:** Open `config.py` and populate the necessary credentials:
+    *   `SUPABASE_URL`
+    *   `SUPABASE_KEY`
+    *   `SENDER_EMAIL`
+    *   `SENDER_PASSWORD`
+4.  **Database Migration (Supabase):** Ensure your Supabase remote SQL instance has the appropriate tables provisioned (`users`, `target_profiles`, `search_history`, `detections`). See `architecture.md` for schema definitions.
+5.  **Run the Application:**
+    ```bash
+    streamlit run app.py
+    ```
 
-**Backend & Integration**
-- **Streamlit:** สร้างส่วนติดต่อผู้ใช้งาน (Web Interface)
-- **SQLite3 & PyYAML:** จัดการฐานข้อมูลส่วนตัวและการเก็บค่า Configuration
-- **bcrypt:** เข้ารหัสรหัสผ่านเพื่อความปลอดภัยสูงสุดของข้อมูลผู้ใช้งาน
-- **SMTP:** เซิร์ฟเวอร์ส่งอีเมลแจ้งเตือนอัตโนมัติ
+## Maintenance and Upgrades
 
-## ความต้องการของระบบ
+*   **Database Backups:** Supabase automatically creates daily snapshots of the database. However, ensure that JSON embeddings in `target_profiles` are periodically pruned if they are no longer relevant to save cloud bandwidth.
+*   **Model Caching:** The HuggingFace Transformers library will download the `openai/clip-vit-base-patch32` weights locally the first time it is run. Ensure the host environment has at least 2GB of free storage for model cache files.
 
-- Python 3.10 หรือ 3.11 (แนะนำเวอร์ชัน 3.11.4)
-- หน่วยความจำ (RAM) อย่างน้อย 4GB (แนะนำ 8GB ขึ้นไปสำหรับการประมวลผลวิดีโอ)
-- พื้นที่ว่างในฮาร์ดดิสก์อย่างน้อย 2GB สำหรับแคชและตัวแบบจำลอง AI
-- Git
+## Precautions
 
-## การติดตั้ง
-
-1. **ดาวน์โหลด Source Code**
-   ```bash
-   git clone https://github.com/Piyaphum/person-reid.git
-   cd person-reid
-   ```
-
-2. **สร้าง Virtual Environment**
-   ```bash
-   python -m venv .venv
-   
-   # สำหรับ Windows
-   .venv\Scripts\activate
-   
-   # สำหรับ Mac/Linux
-   # source .venv/bin/activate
-   ```
-
-3. **ติดตั้ง Package ที่จำเป็น**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **เริ่มการทำงานของแอปพลิเคชัน**
-   ```bash
-   streamlit run app.py
-   ```
-
-## การตั้งค่าระบบและการแจ้งเตือน
-
-การตั้งค่ารหัสผ่านและค่าคงที่ทั้งหมดถูกแยกไว้ในไฟล์การตั้งค่า 2 ไฟล์หลัก เพื่อความปลอดภัยและง่ายต่อการปรับแต่ง:
-
-### 1. auth_config.yaml (กำหนดสิทธิ์และบัญชีผู้ใช้งาน)
-ไฟล์นี้เก็บข้อมูลผู้ใช้งานทั้งหมด โดยรหัสผ่านจะถูกเข้ารหัสทางคณิตศาสตร์ แนะนำให้สร้างและแก้ไขผ่านปุ่มเมนูบนหน้า Admin Dashboard แทนการแก้ไขไฟล์นี้ด้วยมือ เพื่อหลีกเลี่ยงข้อผิดพลาด
-
-### 2. config.py (การตั้งค่าการแจ้งเตือน)
-สำหรับเปิดใช้งานระบบแจ้งเตือนผ่านอีเมลเมื่อตรวจพบเป้าหมาย ให้เข้าไปแก้ไขการตั้งค่าภายในไฟล์ `config.py` ตามตัวอย่างด้านล่าง
-
-```python
-# Email Config
-SENDER_EMAIL = "piyaphum1492@gmail.com"
-SENDER_PASSWORD = "app gmail pass word"   # ใช้ App Passwords แทนรหัสผ่านหลัก
-```
-
-*หมายเหตุ: โปรดหลีกเลี่ยงการใช้รหัสผ่านอีเมลหลักของคุณโดยตรง (เพื่อความปลอดภัย ให้สร้าง App Password จากเมนู 2-Step Verification ของ Google)*
-
-## ความปลอดภัยของข้อมูล
-
-- **การเข้ารหัสรหัสผ่าน:** รหัสผ่านทั้งหมดในระบบถูกเข้ารหัสด้วย bcrypt ดังนั้นจึงไม่สามารถอ่านรหัสผ่านเป็นข้อความปกติได้
-- **การประมวลผลภายในเครื่อง:** การวิเคราะห์ใบหน้าและข้อมูลวิดีโอจะถูกประมวลผลอยู่บนเครื่องเซิฟเวอร์แบบ Offline เท่านั้น ไม่มีการสูบข้อมูลหรือส่งต่อคลิปวิดีโอขึ้นสู่ Public API ภายนอก ช่วยให้มั่นใจว่าการจัดการข้อมูลเป็นไปตามนโยบายด้านความเป็นส่วนตัว (Privacy Policy) และพรบ. คุ้มครองข้อมูลส่วนบุคคล (PDPA)
+1.  **Code Security:** Never commit `config.py` if it contains hardcoded raw API keys or gmail application passwords to public repositories. Always use `.env` files or secure secret managers in production.
+2.  **Memory Constraints:** The application processes video frame-by-frame. Setting the `DEFAULT_SNAPSHOT_INTERVAL` too low (e.g., `< 0.5s`) on heavy videos (4K duration) will result in extremely high RAM usage due to array vectorizations.
+3.  **Authentication Binding:** The "Forgot Password" 2-step verification requires an active outgoing SMTP server configuration. If Gmail blocks the application (due to Google Account security policy resets), users will not receive the verification code required to regain access. Always verify email settings.

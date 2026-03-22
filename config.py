@@ -6,6 +6,10 @@ import os
 # URLs
 WEB_APP_URL = "http://localhost:8501"
 
+# Supabase Auth Connection (Censored for security)
+SUPABASE_URL = "your_supabase_url_here"
+SUPABASE_KEY = "your_supabase_key_here"     
+
 # Directories
 RESULT_DIR = "detected_results"
 TEMP_DIR = "D:\\person-reid\\temp_video"
@@ -18,10 +22,9 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.70
 DEFAULT_COLOR_STRICTNESS = 0.6
 DEFAULT_SNAPSHOT_INTERVAL = 1.0
 
-# Email Config
-SENDER_EMAIL = "piyaphum1492@gmail.com"
-SENDER_PASSWORD = "your app gmail pass"
-
+# Email Config (Censored for security)
+SENDER_EMAIL = "your_email@gmail.com"
+SENDER_PASSWORD = "your_email_app_password"
 # Model Paths
 YOLO_MODEL = 'yolov8n.pt'
 CLIP_MODEL = "openai/clip-vit-base-patch32"
