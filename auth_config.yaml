@@ -5,7 +5,7 @@ cookie:
 credentials:
   usernames:
     admin:
-      email: admin@ku.th
+      email: piyaphum1492@gmail.com
       name: Admin
       password: $2b$12$B9.37ThKMyGTbXut9a3tT.V8.Ga.1ze0YyPsaRCAbo3kv1ZOuDmp.
       role: admin
@@ -13,4 +13,9 @@ credentials:
       email: officer1@ku.th
       name: Officer 1
       password: $2b$12$x6hKJjne5p9JBAJxluljfefyw6JRIOCLxa20JigEasB1mPmAXz8xS
+      role: viewer
+    Charlie_Kirk:
+      email: charliekirk@gmail.com
+      name: Charlie Kirk
+      password: $2b$12$e30yjpx6u3x//3nGQr1kjOQZn4PFvsyPXQ.G9WCjDpioYAO7WOVFq
       role: viewer

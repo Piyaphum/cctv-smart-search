@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from deepface import DeepFace
 from sklearn.cluster import KMeans
 
 
@@ -153,19 +152,8 @@ def extract_colors_from_text(text):
 
 
 def detect_gender(image_pil):
-    """Detect gender from image"""
-    try:
-        img_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
-        result = DeepFace.analyze(img_cv, actions=['gender'], enforce_detection=False)
-        
-        if isinstance(result, list) and len(result) > 0:
-            gender = result[0].get('gender', {})
-            if isinstance(gender, dict):
-                dominant_gender = max(gender.items(), key=lambda x: x[1])[0]
-                return dominant_gender
-        return 'Unknown'
-    except:
-        return 'Unknown'
+    """Detect gender from image (DeepFace removed)"""
+    return 'Unknown'
 
 
 def extract_gender_from_text(text):

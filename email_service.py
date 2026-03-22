@@ -65,3 +65,48 @@ def send_email_report(summary_dict, recipient_emails, sender_email=SENDER_EMAIL,
         return True, "Email sent successfully"
     except Exception as e:
         return False, str(e)
+
+
+def send_password_reset_email(recipient_email, username, new_password, sender_email=SENDER_EMAIL, sender_password=SENDER_PASSWORD):
+    """
+    Send password reset email
+    
+    Args:
+        recipient_email: user's registered email
+        username: user's username
+        new_password: newly generated password
+        sender_email: sender email
+        sender_password: sender password
+        
+    Returns:
+        (success, message)
+    """
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'Password Reset Completed'
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+        
+        html_body = f"""
+        <html>
+            <body style="font-family:Arial, sans-serif; background-color:#0a0e27; color:#e8eef2;">
+                <div style="background-color:#151b28; padding:20px; border-radius:8px; border-left:4px solid #1dd1a1;">
+                    <h2 style="color:#1dd1a1; margin:0;">Password Reset Successfully</h2>
+                    <p style="margin:10px 0 0;">Hello <b>{username}</b>,</p>
+                    <p>Your password for the Person Detection System has been successfully reset.</p>
+                    <p>Your new temporary password is: <b style="background-color:#2c3e50; padding:4px 8px; border-radius:4px;">{new_password}</b></p>
+                    <p style="margin-top:20px; font-size:12px; color:#a0aec0;">If you did not request this change, please contact your system administrator.</p>
+                </div>
+            </body>
+        </html>
+        """
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+            
+        return True, "Email sent successfully"
+    except Exception as e:
+        return False, str(e)

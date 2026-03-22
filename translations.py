@@ -80,6 +80,42 @@ TRANSLATIONS = {
         # Errors
         "error_please_upload": "โปรดอัปโหลดเป้าหมายและวิดีโอ",
         "no_detected_results": "ไม่พบผลลัพธ์",
+        
+        # Admin Dashboard
+        "admin_dashboard": "แดชบอร์ดผู้ดูแลระบบ",
+        "add_new_user": "เพิ่มผู้ใช้ใหม่",
+        "username": "ชื่อผู้ใช้",
+        "full_name": "ชื่อ-นามสกุล",
+        "first_name": "ชื่อจริง",
+        "last_name": "นามสกุล",
+        "email": "อีเมล",
+        "password": "รหัสผ่าน",
+        "role": "บทบาท",
+        "role_admin": "ผู้ดูแลระบบ (admin)",
+        "role_viewer": "ผู้ใช้งานทั่วไป (viewer)",
+        "create_user": "สร้างผู้ใช้",
+        "user_created_success": "สร้างผู้ใช้ใหม่เรียบร้อยแล้ว!",
+        "user_creation_error": "เกิดข้อผิดพลาด: ชื่อผู้ใช้นี้อาจมีอยู่แล้ว",
+        "fill_all_fields": "กรุณากรอกข้อมูลให้ครบถ้วน",
+        "password_length_error": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร",
+        
+        # Forgot Password
+        "forgot_password": "ลืมรหัสผ่าน?",
+        "reset_password": "ตั้งรหัสผ่านใหม่",
+        "reset_success": "ส่งรหัสผ่านใหม่ไปที่อีเมลที่ลงทะเบียนแล้ว",
+        "reset_fail": "เกิดข้อผิดพลาดในการส่งอีเมล",
+        "username_not_found": "ไม่พบชื่อผู้ใช้นี้ในระบบ",
+        
+        # User Management CRUD
+        "manage_users": "จัดการผู้ใช้",
+        "edit_user": "แก้ไขข้อมูลผู้ใช้",
+        "delete_user": "ลบ",
+        "save_changes": "บันทึกการเปลี่ยนแปลง",
+        "select_user_to_edit": "เลือกผู้ใช้ที่ต้องการแก้ไข",
+        "new_password_optional": "รหัสผ่านใหม่ (เว้นว่างหากไม่ต้องการเปลี่ยน)",
+        "user_updated_success": "อัปเดตข้อมูลผู้ใช้สำเร็จ!",
+        "user_deleted_success": "ลบผู้ใช้สำเร็จ!",
+        "current_user_label": "ผู้ใช้งานปัจจุบัน",
     },
     
     "en": {
@@ -158,6 +194,42 @@ TRANSLATIONS = {
         # Errors
         "error_please_upload": "Please upload targets and videos",
         "no_detected_results": "No results found",
+        
+        # Admin Dashboard
+        "admin_dashboard": "Admin Dashboard",
+        "add_new_user": "Add New User",
+        "username": "Username",
+        "full_name": "Full Name",
+        "first_name": "First Name",
+        "last_name": "Last Name",
+        "email": "Email",
+        "password": "Password",
+        "role": "Role",
+        "role_admin": "Admin",
+        "role_viewer": "Viewer",
+        "create_user": "Create User",
+        "user_created_success": "New user successfully created!",
+        "user_creation_error": "Error: Username may already exist.",
+        "fill_all_fields": "Please fill in all fields.",
+        "password_length_error": "Password must be at least 8 characters long.",
+        
+        # Forgot Password
+        "forgot_password": "Forgot Password?",
+        "reset_password": "Reset Password",
+        "reset_success": "A new password has been sent to the registered email.",
+        "reset_fail": "An error occurred while sending the email.",
+        "username_not_found": "Username not found in the system.",
+        
+        # User Management CRUD
+        "manage_users": "Manage Users",
+        "edit_user": "Edit User",
+        "delete_user": "Delete",
+        "save_changes": "Save Changes",
+        "select_user_to_edit": "Select user to edit",
+        "new_password_optional": "New Password (leave blank to keep current)",
+        "user_updated_success": "User updated successfully!",
+        "user_deleted_success": "User deleted successfully!",
+        "current_user_label": "Current User",
     }
 }
 

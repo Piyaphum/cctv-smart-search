@@ -8,7 +8,6 @@ import shutil
 import cv2
 from PIL import Image
 import glob
-from deepface import DeepFace
 
 # ===== Import Modules =====
 from config import RESULT_DIR, TEMP_DIR, DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_COLOR_STRICTNESS, DEFAULT_SNAPSHOT_INTERVAL
@@ -49,6 +48,32 @@ if not st.session_state.get('authentication_status'):
         st.error('Invalid username or password')
     else:
         st.info('Please log in to continue')
+        
+    lang = st.session_state.get('language', 'th')
+    with st.expander(get_text('forgot_password', lang)):
+        with st.form("forgot_password_form"):
+            forgot_username = st.text_input(get_text('username', lang))
+            if st.form_submit_button(get_text('reset_password', lang)):
+                if forgot_username in auth_config['credentials']['usernames']:
+                    user_email = auth_config['credentials']['usernames'][forgot_username]['email']
+                    import random, string
+                    new_random_pass = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                    
+                    # Update config
+                    auth_config['credentials']['usernames'][forgot_username]['password'] = stauth.Hasher([new_random_pass]).generate()[0]
+                    with open('auth_config.yaml', 'w', encoding='utf-8') as f:
+                        yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
+                    
+                    # Send email
+                    from email_service import send_password_reset_email
+                    success, msg = send_password_reset_email(user_email, forgot_username, new_random_pass)
+                    if success:
+                        st.success(get_text('reset_success', lang))
+                    else:
+                        st.error(f"{get_text('reset_fail', lang)}: {msg}")
+                else:
+                    st.error(get_text('username_not_found', lang))
+                    
     st.stop()
 
 # ===== Setup =====
@@ -125,8 +150,14 @@ lang = st.session_state.language
 st.markdown(f"<h1>{get_text('page_title', lang)}</h1>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:#a0aec0;'>{get_text('subtitle', lang)}</p>", unsafe_allow_html=True)
 
+# ===== Get User Role =====
+current_role = auth_config['credentials']['usernames'].get(current_user, {}).get('role', 'viewer')
+
 # ===== Tabs =====
-tab1, tab2 = st.tabs([get_text('search', lang), get_text('results', lang)])
+if current_role == 'admin':
+    tab1, tab2, tab3 = st.tabs([get_text('search', lang), get_text('results', lang), get_text('admin_dashboard', lang)])
+else:
+    tab1, tab2 = st.tabs([get_text('search', lang), get_text('results', lang)])
 
 # ===== TAB 1: SEARCH =====
 with tab1:
@@ -310,11 +341,7 @@ with tab1:
                                             hist = get_part_histogram(person_img_pil)
                                             
                                             # Try to detect gender
-                                            try:
-                                                gender_result = DeepFace.analyze(person_frame, actions=['gender'], verbose=False)
-                                                gender = gender_result[0]['gender']
-                                            except:
-                                                gender = "Unknown"
+                                            gender = "Unknown"
                                             
                                             # Match against targets
                                             matches = batch_match_targets(
@@ -431,6 +458,142 @@ with tab2:
                     st.caption(get_text('no_detected_results', lang))
     else:
         st.info("Results directory not found")
+
+
+# ===== TAB 3: ADMIN DASHBOARD =====
+if current_role == 'admin':
+    with tab3:
+        st.markdown(f"### {get_text('admin_dashboard', lang)}")
+        
+        t_add, t_manage = st.tabs([get_text('add_new_user', lang), get_text('manage_users', lang)])
+        
+        with t_add:
+            with st.form("new_user_form"):
+                st.markdown(f"**{get_text('add_new_user', lang)}**")
+                new_username = st.text_input(get_text('username', lang))
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_fname = st.text_input(get_text('first_name', lang))
+                with col2:
+                    new_lname = st.text_input(get_text('last_name', lang))
+                new_name = f"{new_fname.strip()} {new_lname.strip()}".strip()
+                
+                new_email = st.text_input(get_text('email', lang))
+                new_password = st.text_input(get_text('password', lang), type="password")
+                
+                role_options = {
+                    get_text('role_viewer', lang): 'viewer',
+                    get_text('role_admin', lang): 'admin'
+                }
+                new_role_label = st.selectbox(get_text('role', lang), options=list(role_options.keys()))
+                
+                submit_button = st.form_submit_button(get_text('create_user', lang))
+                
+                if submit_button:
+                    if not new_username or not new_fname.strip() or not new_lname.strip() or not new_email or not new_password:
+                        st.error(get_text('fill_all_fields', lang))
+                    elif len(new_password) < 8:
+                        st.error(get_text('password_length_error', lang))
+                    elif new_username in auth_config['credentials']['usernames']:
+                        st.error(get_text('user_creation_error', lang))
+                    else:
+                        try:
+                            hashed_password = stauth.Hasher([new_password]).generate()[0]
+                            auth_config['credentials']['usernames'][new_username] = {
+                                'email': new_email,
+                                'name': new_name,
+                                'password': hashed_password,
+                                'role': role_options[new_role_label]
+                            }
+                            
+                            with open('auth_config.yaml', 'w', encoding='utf-8') as f:
+                                yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
+                                
+                            st.success(get_text('user_created_success', lang))
+                        except Exception as e:
+                            st.error(f"Error saving user: {e}")
+
+        with t_manage:
+            st.markdown(f"**{get_text('manage_users', lang)}**")
+            user_list = list(auth_config['credentials']['usernames'].keys())
+            
+            for uname in user_list:
+                udetails = auth_config['credentials']['usernames'][uname]
+                c1, c2, c3, c4 = st.columns([2, 3, 2, 2])
+                c1.write(f"**{uname}**")
+                c2.write(udetails.get('email', '-'))
+                c3.write(udetails.get('role', 'viewer'))
+                
+                if uname == current_user:
+                    c4.caption(f"({get_text('current_user_label', lang)})")
+                else:
+                    if c4.button(get_text('delete_user', lang), key=f"del_{uname}"):
+                        del auth_config['credentials']['usernames'][uname]
+                        with open('auth_config.yaml', 'w', encoding='utf-8') as f:
+                            yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
+                        st.rerun()
+            
+            st.markdown("---")
+            st.markdown(f"**{get_text('edit_user', lang)}**")
+            user_to_edit = st.selectbox(get_text('select_user_to_edit', lang), options=user_list)
+            
+            if user_to_edit:
+                edetails = auth_config['credentials']['usernames'][user_to_edit]
+                with st.form(f"edit_form_{user_to_edit}"):
+                    current_name_parts = edetails.get('name', '').split(' ', 1)
+                    current_fname = current_name_parts[0] if len(current_name_parts) > 0 else ""
+                    current_lname = current_name_parts[1] if len(current_name_parts) > 1 else ""
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        edit_fname = st.text_input(get_text('first_name', lang), value=current_fname)
+                    with col2:
+                        edit_lname = st.text_input(get_text('last_name', lang), value=current_lname)
+                    edit_name = f"{edit_fname.strip()} {edit_lname.strip()}".strip()
+                    
+                    edit_email = st.text_input(get_text('email', lang), value=edetails.get('email', ''))
+                    
+                    role_options = {
+                        get_text('role_viewer', lang): 'viewer',
+                        get_text('role_admin', lang): 'admin'
+                    }
+                    
+                    # Find current role index
+                    current_r = edetails.get('role', 'viewer')
+                    try:
+                        r_idx = list(role_options.values()).index(current_r)
+                    except:
+                        r_idx = 0
+                        
+                    edit_role_label = st.selectbox(get_text('role', lang), options=list(role_options.keys()), index=r_idx)
+                    edit_password = st.text_input(get_text('new_password_optional', lang), type="password")
+                    
+                    if st.form_submit_button(get_text('save_changes', lang)):
+                        valid = True
+                        if not edit_fname.strip() or not edit_lname.strip() or not edit_email:
+                            st.error(get_text('fill_all_fields', lang))
+                            valid = False
+                        elif edit_password and len(edit_password) < 8:
+                            st.error(get_text('password_length_error', lang))
+                            valid = False
+                            
+                        if valid:
+                            try:
+                                auth_config['credentials']['usernames'][user_to_edit]['name'] = edit_name
+                                auth_config['credentials']['usernames'][user_to_edit]['email'] = edit_email
+                                auth_config['credentials']['usernames'][user_to_edit]['role'] = role_options[edit_role_label]
+                                
+                                if edit_password:
+                                    auth_config['credentials']['usernames'][user_to_edit]['password'] = stauth.Hasher([edit_password]).generate()[0]
+                                    
+                                with open('auth_config.yaml', 'w', encoding='utf-8') as f:
+                                    yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
+                                
+                                st.success(get_text('user_updated_success', lang))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error updating user: {e}")
 
 
 # ===== Documentation =====
