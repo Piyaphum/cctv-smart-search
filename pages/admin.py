@@ -185,7 +185,13 @@ with t_add:
         new_role_label = st.selectbox("Role", options=["viewer", "admin"])
         
         if st.form_submit_button("✅ Create User", type="primary"):
-            if not new_username or not new_fname.strip() or not new_lname.strip() or not new_email or not new_password:
+            new_username = new_username.strip()
+            new_fname = new_fname.strip()
+            new_lname = new_lname.strip()
+            new_email = new_email.strip()
+            new_name = f"{new_fname} {new_lname}".strip()
+            
+            if not new_username or not new_fname or not new_lname or not new_email or not new_password:
                 st.error("กรุณากรอกข้อมูลให้ครบถ้วน")
             elif len(new_password) < 8:
                 st.error("รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร")
@@ -202,6 +208,8 @@ with t_add:
                     if supabase:
                         supabase.table('users').insert(data).execute()
                         st.success("✅ สร้างผู้ใช้ใหม่ลงระบบ Cloud สำเร็จ!")
+                        import time
+                        time.sleep(1)
                         st.rerun()
                     else:
                         st.error("ฐานข้อมูล Supabase ยังไม่พร้อมใช้งาน")

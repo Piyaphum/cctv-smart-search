@@ -6,32 +6,48 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import SENDER_EMAIL, SENDER_PASSWORD, WEB_APP_URL
 
-def get_email_credentials():
+def get_email_credentials(username=None):
     try:
         import yaml
-        with open('settings.yaml', 'r', encoding='utf-8') as f:
-            sys_settings = yaml.safe_load(f)
-        # Use settings if found and not empty, otherwise fallback to config
-        email = sys_settings.get("SENDER_EMAIL", "").strip() or SENDER_EMAIL
-        password = sys_settings.get("SENDER_PASSWORD", "").strip() or SENDER_PASSWORD
-        return email, password
+        import os
+        
+        # 1. Try to get per-user settings from user_settings.yaml
+        if username and os.path.exists('user_settings.yaml'):
+            with open('user_settings.yaml', 'r', encoding='utf-8') as f:
+                user_settings = yaml.safe_load(f) or {}
+            if username in user_settings:
+                email = user_settings[username].get("SENDER_EMAIL", "").strip()
+                password = user_settings[username].get("SENDER_PASSWORD", "").strip()
+                if email and password:
+                    return email, password
+        
+        # 2. Fallback to global settings.yaml
+        if os.path.exists('settings.yaml'):
+            with open('settings.yaml', 'r', encoding='utf-8') as f:
+                sys_settings = yaml.safe_load(f) or {}
+            email = sys_settings.get("SENDER_EMAIL", "").strip()
+            password = sys_settings.get("SENDER_PASSWORD", "").strip()
+            if email and password:
+                return email, password
+                
+        # 3. Fallback to hardcoded config
+        return SENDER_EMAIL, SENDER_PASSWORD
     except:
         return SENDER_EMAIL, SENDER_PASSWORD
 
-def send_email_report(summary_dict, recipient_emails):
+def send_email_report(summary_dict, recipient_emails, username=None):
     """
     Send email report with detection summary
     
     Args:
         summary_dict: {video_name: {target_name: [(match_data), ...]}}
         recipient_emails: list of email addresses
-        sender_email: sender email
-        sender_password: sender password
+        username: (Optional) username to look up specific credentials
     
     Returns:
         (success, message)
     """
-    sender_email, sender_password = get_email_credentials()
+    sender_email, sender_password = get_email_credentials(username)
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f'Detection Alert: Found Matches in {len(summary_dict)} Videos'
@@ -82,15 +98,8 @@ def send_email_report(summary_dict, recipient_emails):
 def send_password_reset_email(recipient_email, username, new_password):
     """
     Send password reset email
-    
-    Args:
-        recipient_email: user's registered email
-        username: user's username
-        new_password: newly generated password
-        
-    Returns:
-        (success, message)
     """
+    # For password reset, we use the global/admin credentials
     sender_email, sender_password = get_email_credentials()
     try:
         msg = MIMEMultipart('alternative')
@@ -127,6 +136,7 @@ def send_verification_code_email(recipient_email, username, verification_code):
     """
     Send a 6-digit OTP verification code for password reset
     """
+    # For verification codes, we use global/admin credentials
     sender_email, sender_password = get_email_credentials()
     try:
         msg = MIMEMultipart('alternative')

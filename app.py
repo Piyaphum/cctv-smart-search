@@ -43,19 +43,25 @@ except Exception:
 try:
     supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
     response = supabase.table('users').select('*').execute()
-    credentials = {'usernames': {}}
+    
+    # Initialize credentials if not exists
+    if 'credentials' not in auth_config:
+        auth_config['credentials'] = {'usernames': {}}
+    
     if response.data:
         for user in response.data:
-            credentials['usernames'][user['username']] = {
+            uname = user['username'].strip()
+            # Merge: This ensures users in auth_config.yaml are kept if not in DB
+            auth_config['credentials']['usernames'][uname] = {
                 'email': user['email'],
                 'name': user['name'],
                 'password': user['password_hash'],
                 'role': user.get('role', 'viewer')
             }
-    auth_config['credentials'] = credentials
 except Exception as e:
     st.error(f"Failed to connect to Cloud Database: {e}")
-    auth_config['credentials'] = {'usernames': {}}
+    if 'credentials' not in auth_config:
+        auth_config['credentials'] = {'usernames': {}}
 
 authenticator = stauth.Authenticate(
     auth_config['credentials'],
@@ -88,7 +94,12 @@ if not st.session_state.get('authentication_status'):
             reg_password_confirm = st.text_input(get_text('confirm_password', lang), type="password")
             
             if st.form_submit_button(get_text('register_button', lang), type="primary"):
-                if not reg_username or not reg_fname.strip() or not reg_lname.strip() or not reg_email or not reg_password:
+                reg_username = reg_username.strip()
+                reg_fname = reg_fname.strip()
+                reg_lname = reg_lname.strip()
+                reg_email = reg_email.strip()
+                
+                if not reg_username or not reg_fname or not reg_lname or not reg_email or not reg_password:
                     st.error(get_text('fill_all_fields', lang))
                 elif len(reg_password) < 8:
                     st.error(get_text('password_length_error', lang))
@@ -97,7 +108,7 @@ if not st.session_state.get('authentication_status'):
                 else:
                     try:
                         hashed_pw = stauth.Hasher([reg_password]).generate()[0]
-                        reg_name = f"{reg_fname.strip()} {reg_lname.strip()}"
+                        reg_name = f"{reg_fname} {reg_lname}"
                         data = {
                             "username": reg_username,
                             "name": reg_name,
@@ -108,6 +119,10 @@ if not st.session_state.get('authentication_status'):
                         if supabase:
                             supabase.table('users').insert(data).execute()
                             st.success(get_text('registration_success', lang))
+                            # Add a small delay and rerun to ensure DB state is updated and fetched
+                            import time
+                            time.sleep(1)
+                            st.rerun()
                         else:
                             st.error("Cloud database is unavailable.")
                     except Exception as e:
@@ -267,26 +282,48 @@ with st.sidebar:
             
         try:
             import yaml
-            with open('settings.yaml', 'r', encoding='utf-8') as f:
-                sys_settings = yaml.safe_load(f)
+            if os.path.exists('user_settings.yaml'):
+                with open('user_settings.yaml', 'r', encoding='utf-8') as f:
+                    all_user_settings = yaml.safe_load(f) or {}
+            else:
+                all_user_settings = {}
         except Exception:
-            sys_settings = {}
+            all_user_settings = {}
             
-        curr_email = sys_settings.get("SENDER_EMAIL", "")
+        user_config = all_user_settings.get(current_user, {})
+        curr_email = user_config.get("SENDER_EMAIL", "")
+        curr_pass = user_config.get("SENDER_PASSWORD", "")
         
-        with st.form("sys_email_form"):
-            sys_email = st.text_input("Sender Email", value=curr_email)
-            sys_pass = st.text_input("App Password", type="password")
+        # Load global settings as fallback if user has none
+        if not curr_email:
+            try:
+                with open('settings.yaml', 'r', encoding='utf-8') as f:
+                    sys_settings = yaml.safe_load(f) or {}
+                curr_email = sys_settings.get("SENDER_EMAIL", "")
+                curr_pass = sys_settings.get("SENDER_PASSWORD", "")
+            except:
+                pass
+
+        # Use container instead of form to avoid "Press Enter to submit form" hint
+        with st.container():
+            sys_email = st.text_input("Sender Email", value=curr_email, key=f"email_input_{current_user}")
+            sys_pass = st.text_input("App Password", value=curr_pass, type="password", key=f"pass_input_{current_user}")
             
-            if st.form_submit_button("💾 Save Settings", type="primary"):
-                sys_settings["SENDER_EMAIL"] = sys_email.strip()
+            if st.button("💾 Save Settings", type="primary", key=f"save_btn_{current_user}"):
+                if current_user not in all_user_settings:
+                    all_user_settings[current_user] = {}
+                
+                all_user_settings[current_user]["SENDER_EMAIL"] = sys_email.strip()
                 if sys_pass.strip():  
-                    sys_settings["SENDER_PASSWORD"] = sys_pass.strip().replace(" ", "")
+                    all_user_settings[current_user]["SENDER_PASSWORD"] = sys_pass.strip().replace(" ", "")
+                
                 try:
                     import yaml
-                    with open('settings.yaml', 'w', encoding='utf-8') as f:
-                        yaml.dump(sys_settings, f, default_flow_style=False)
+                    with open('user_settings.yaml', 'w', encoding='utf-8') as f:
+                        yaml.dump(all_user_settings, f, default_flow_style=False)
                     st.success("✅ บันทึกสำเร็จ!")
+                    # Briefly wait or rerun to refresh view if needed
+                    # st.rerun() 
                 except Exception as e:
                     st.error(f"Error: {e}")
 
@@ -622,7 +659,7 @@ with tab1:
                 # Send email report if enabled
                 if enable_email and recipient_emails and total_matches > 0:
                     try:
-                        success, msg = send_email_report(email_summary, recipient_emails)
+                        success, msg = send_email_report(email_summary, recipient_emails, username=current_user)
                         if success:
                             st.info(f"📧 Email sent to {', '.join(recipient_emails)}")
                         else:
