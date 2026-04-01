@@ -99,8 +99,8 @@ def send_password_reset_email(recipient_email, username, new_password):
     """
     Send password reset email
     """
-    # For password reset, we use the global/admin credentials
-    sender_email, sender_password = get_email_credentials()
+    # Use the specific user's credentials if available, otherwise global/admin fallback
+    sender_email, sender_password = get_email_credentials(username)
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Password Reset Completed'
@@ -136,8 +136,8 @@ def send_verification_code_email(recipient_email, username, verification_code):
     """
     Send a 6-digit OTP verification code for password reset
     """
-    # For verification codes, we use global/admin credentials
-    sender_email, sender_password = get_email_credentials()
+    # Use specific user's credentials if available, otherwise global/admin fallback
+    sender_email, sender_password = get_email_credentials(username)
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Password Reset Verification Code'
