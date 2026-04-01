@@ -436,38 +436,62 @@ with tab1:
             target_files = st.file_uploader(get_text('upload_images', lang), type=['jpg', 'png'], accept_multiple_files=True)
             save_to_db = st.checkbox(get_text('save_to_database', lang), value=True)
             
+            # --- Session-based cache for uploaded target images ---
+            if 'target_cache' not in st.session_state:
+                st.session_state.target_cache = {}
+            
             if target_files:
-                with st.spinner(get_text('processing', lang)):
-                    for tfile in target_files:
+                # 1. First, process ANY NEW files that aren't in the cache yet
+                for tfile in target_files:
+                    file_id = f"{tfile.name}_{tfile.size}"
+                    if file_id not in st.session_state.target_cache:
+                        with st.spinner(f"{get_text('processing', lang)} {tfile.name}"):
+                            tdata = generate_target_data(
+                                tfile,
+                                models['detector'],
+                                models['reid_model'],
+                                models['base_transform'],
+                                models['aug_transform']
+                            )
+                            # Set initial name from filename
+                            tdata["display_name"] = tfile.name.split('.')[0]
+                            st.session_state.target_cache[file_id] = tdata
+                
+                # 2. Display and configure ALL current files from cache
+                for tfile in target_files:
+                    fid = f"{tfile.name}_{tfile.size}"
+                    if fid in st.session_state.target_cache:
+                        t_entry = st.session_state.target_cache[fid]
+                        
+                        # Input name (linked to entry via state)
                         tname = st.text_input(
                             f"{get_text('name_for', lang)} {tfile.name}",
-                            value=tfile.name.split('.')[0],
-                            key=f"name_{tfile.name}"
+                            value=t_entry.get("display_name", ""),
+                            key=f"name_input_{fid}"
                         )
+                        # Sync back to cache entry
+                        t_entry["display_name"] = tname
                         
-                        tdata = generate_target_data(
-                            tfile,
-                            models['detector'],
-                            models['reid_model'],
-                            models['base_transform'],
-                            models['aug_transform']
-                        )
-                        tdata["name"] = tname
-                        targets_db.append(tdata)
+                        # Add to the global targets_db list for the search engine
+                        targets_db.append({
+                            **t_entry,
+                            "name": tname # Use potentially edited name
+                        })
                         
                         c1, c2 = st.columns([1, 3])
-                        c1.image(tdata['image'], use_container_width=True)
+                        c1.image(t_entry['image'], use_container_width=True)
                         c2.markdown(f"**{tname}**")
                         
-                        if save_to_db and st.button(f"{get_text('save_profile', lang)}: '{tname}'", key=f"save_{tfile.name}"):
-                            save_target_profile(
-                                name=tname,
-                                embeddings=tdata["embeddings"],
-                                hists_full=tdata["hists_full"],
-                                hists_top=tdata["hists_top"],
-                                created_by=current_user
-                            )
-                            st.success(get_text('saved', lang))
+                        if save_to_db:
+                            if st.button(f"{get_text('save_profile', lang)}: '{tname}'", key=f"save_btn_{fid}"):
+                                save_target_profile(
+                                    name=tname,
+                                    embeddings=t_entry["embeddings"],
+                                    hists_full=t_entry["hists_full"],
+                                    hists_top=t_entry["hists_top"],
+                                    created_by=current_user
+                                )
+                                st.success(get_text('saved', lang))
         
         if targets_db:
             st.markdown(f"<span style='color:#1dd1a1;'>{len(targets_db)} {get_text('targets_selected', lang)}</span>", unsafe_allow_html=True)
