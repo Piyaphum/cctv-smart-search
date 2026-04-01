@@ -12,7 +12,7 @@ from feature_extraction import (
 )
 
 
-def generate_target_data(image_file, detector, reid_model, base_tf, aug_tf, n_aug=3):
+def generate_target_data(image_file, detector, reid_model, base_tf, aug_tf, n_aug=10):
     """
     Generate embeddings and features for target image
     

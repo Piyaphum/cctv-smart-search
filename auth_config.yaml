@@ -7,15 +7,25 @@ credentials:
     admin:
       email: piyaphum1492@gmail.com
       name: Admin
-      password: $2b$12$yWaMShrqHiQdV9zVKQQCHOO/EEzPZ4G8FqleJ3YrZs80ohxMWFzLK
+      password: $2b$12$ZEd.AV/71Wbgc5.piRZa4.CVEa/t/8WJcqHdiTqUx2CwEe5Dd2mzy
       role: admin
     officer1:
       email: officer1@ku.th
       name: Officer 1
-      password: $2b$12$x6hKJjne5p9JBAJxluljfefyw6JRIOCLxa20JigEasB1mPmAXz8xS
+      password: $2b$12$X9o.8dU/W0213eX5KmP2jeQWcT3EcUTB3GV1XDR.EMw1e8pl44h2C
       role: viewer
-    Charlie_Kirk:
+    charlie_kirk:
       email: charliekirk@gmail.com
       name: Charlie Kirk
       password: $2b$12$e30yjpx6u3x//3nGQr1kjOQZn4PFvsyPXQ.G9WCjDpioYAO7WOVFq
+      role: viewer
+    test:
+      email: piyaphum1492@gmail.com
+      name: test 123
+      password: $2b$12$D7skAYr2lSaniqAtCYNY..smgAjIBwstnPk6tyDWYY7Mt7Vc2ptBq
+      role: viewer
+    phum:
+      email: piyaphum1492@gmail.com
+      name: Piyaphum Muetkhambong
+      password: $2b$12$ApvWM1ZmBMZbvg9/SYz8w.4wEG8sn3XcXSFaEQRyGmRhWE5SPrzLa
       role: viewer

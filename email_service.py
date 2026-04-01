@@ -17,7 +17,7 @@ def get_email_credentials(username=None):
                 user_settings = yaml.safe_load(f) or {}
             if username in user_settings:
                 email = user_settings[username].get("SENDER_EMAIL", "").strip()
-                password = user_settings[username].get("SENDER_PASSWORD", "").strip()
+                password = user_settings[username].get("SENDER_PASSWORD", "").strip().replace(" ", "")
                 if email and password:
                     return email, password
         
@@ -26,14 +26,18 @@ def get_email_credentials(username=None):
             with open('settings.yaml', 'r', encoding='utf-8') as f:
                 sys_settings = yaml.safe_load(f) or {}
             email = sys_settings.get("SENDER_EMAIL", "").strip()
-            password = sys_settings.get("SENDER_PASSWORD", "").strip()
+            password = sys_settings.get("SENDER_PASSWORD", "").strip().replace(" ", "")
             if email and password:
                 return email, password
                 
-        # 3. Fallback to hardcoded config
-        return SENDER_EMAIL, SENDER_PASSWORD
+        # 3. Fallback to hardcoded config (only if no username specified)
+        if not username:
+            return SENDER_EMAIL, SENDER_PASSWORD.replace(" ", "")
+        
+        # If username specified but not found/valid, return error indicators
+        return None, None
     except:
-        return SENDER_EMAIL, SENDER_PASSWORD
+        return SENDER_EMAIL, SENDER_PASSWORD.replace(" ", "")
 
 def send_email_report(summary_dict, recipient_emails, username=None):
     """

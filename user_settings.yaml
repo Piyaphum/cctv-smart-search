@@ -1,6 +1,9 @@
 admin:
   SENDER_EMAIL: piyaphum1492@gmail.com
-  SENDER_PASSWORD: vhvpvarcqfltryxv
+  SENDER_PASSWORD: cdnlclvmjuvknpyt
+phum:
+  SENDER_EMAIL: piyaphum1492@gmail.com
+  SENDER_PASSWORD: nhipkzalhajufxqk
 user1:
   SENDER_EMAIL: user1@example.com
   SENDER_PASSWORD: user1password

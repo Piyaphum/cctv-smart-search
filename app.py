@@ -194,7 +194,9 @@ if not st.session_state.get('authentication_status'):
                                 st.session_state.reset_step = 2
                                 st.rerun()
                             else:
-                                st.error(f"Failed to send email: {msg}")
+                                from email_service import get_email_credentials
+                                s_email, _ = get_email_credentials(target_uname)
+                                st.error(f"Failed to send email (From: {s_email}): {msg}")
                         else:
                             st.error(get_text('username_not_found', lang))
                             
@@ -335,6 +337,23 @@ with st.sidebar:
                     # st.rerun() 
                 except Exception as e:
                     st.error(f"Error: {e}")
+            
+            # --- Test Email Button ---
+            st.divider()
+            if st.button("🚀 Test Gmail Settings", use_container_width=True, key=f"test_mail_{current_user}"):
+                if not sys_email or not sys_pass:
+                    st.error("กรุณากรอก Email และ Password ก่อนทดสอบ")
+                else:
+                    with st.spinner("กำลังทดสอบส่งอีเมล..."):
+                        from email_service import send_verification_code_email
+                        import random
+                        test_code = f"{random.randint(100000, 999999)}"
+                        success, m_msg = send_verification_code_email(sys_email, current_user, test_code)
+                        if success:
+                            st.success(f"✅ อีเมลทดสอบส่งสำเร็จ! (ไปที่ {sys_email})")
+                        else:
+                            st.error(f"❌ ส่งล้มเหลว: {m_msg}")
+                            st.info("💡 คำแนะนำ: ตรวจดู App Password ว่าถูกต้องและไม่มีช่องว่าง")
 
     st.divider()
     
@@ -436,62 +455,58 @@ with tab1:
             target_files = st.file_uploader(get_text('upload_images', lang), type=['jpg', 'png'], accept_multiple_files=True)
             save_to_db = st.checkbox(get_text('save_to_database', lang), value=True)
             
-            # --- Session-based cache for uploaded target images ---
-            if 'target_cache' not in st.session_state:
-                st.session_state.target_cache = {}
-            
             if target_files:
-                # 1. First, process ANY NEW files that aren't in the cache yet
                 for tfile in target_files:
-                    file_id = f"{tfile.name}_{tfile.size}"
-                    if file_id not in st.session_state.target_cache:
-                        with st.spinner(f"{get_text('processing', lang)} {tfile.name}"):
-                            tdata = generate_target_data(
-                                tfile,
-                                models['detector'],
-                                models['reid_model'],
-                                models['base_transform'],
-                                models['aug_transform']
+                    import io
+                    from feature_extraction import extract_embedding, get_part_histogram, get_dominant_color_name
+                    
+                    # Auto-crop if person detected
+                    img = Image.open(tfile).convert('RGB')
+                    import numpy as np
+                    img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                    results = models['detector'](img_cv, classes=0, verbose=False)
+                    
+                    if len(results[0].boxes) > 0:
+                        box = results[0].boxes[0].xyxy[0].cpu().numpy()
+                        x1, y1, x2, y2 = map(int, box)
+                        img = img.crop((x1, y1, x2, y2))
+                    
+                    # Extract features
+                    embedding = extract_embedding(img, models['reid_model'], models['base_transform'])
+                    hist_full = get_part_histogram(img, 'full')
+                    hist_top = get_part_histogram(img, 'top')
+                    color = get_dominant_color_name(img)
+                    
+                    # Input name (linked to entry)
+                    tname = st.text_input(
+                        f"{get_text('name_for', lang)} {tfile.name}",
+                        value=tfile.name.split('.')[0],
+                        key=f"name_input_{tfile.name}_{tfile.size}"
+                    )
+                    
+                    # Add to selection list
+                    targets_db.append({
+                        "name": tname,
+                        "image": img,
+                        "embeddings": [embedding],
+                        "hists_full": [hist_full],
+                        "hists_top": [hist_top],
+                        "color": color
+                    })
+                    
+                    c1, col_save = st.columns([1, 3])
+                    c1.image(img, use_container_width=True)
+                    
+                    if save_to_db:
+                        if col_save.button(f"{get_text('save_profile', lang)}: '{tname}'", key=f"save_btn_{tfile.name}_{tfile.size}"):
+                            save_target_profile(
+                                name=tname,
+                                embeddings=[embedding],
+                                hists_full=[hist_full],
+                                hists_top=[hist_top],
+                                created_by=current_user
                             )
-                            # Set initial name from filename
-                            tdata["display_name"] = tfile.name.split('.')[0]
-                            st.session_state.target_cache[file_id] = tdata
-                
-                # 2. Display and configure ALL current files from cache
-                for tfile in target_files:
-                    fid = f"{tfile.name}_{tfile.size}"
-                    if fid in st.session_state.target_cache:
-                        t_entry = st.session_state.target_cache[fid]
-                        
-                        # Input name (linked to entry via state)
-                        tname = st.text_input(
-                            f"{get_text('name_for', lang)} {tfile.name}",
-                            value=t_entry.get("display_name", ""),
-                            key=f"name_input_{fid}"
-                        )
-                        # Sync back to cache entry
-                        t_entry["display_name"] = tname
-                        
-                        # Add to the global targets_db list for the search engine
-                        targets_db.append({
-                            **t_entry,
-                            "name": tname # Use potentially edited name
-                        })
-                        
-                        c1, c2 = st.columns([1, 3])
-                        c1.image(t_entry['image'], use_container_width=True)
-                        c2.markdown(f"**{tname}**")
-                        
-                        if save_to_db:
-                            if st.button(f"{get_text('save_profile', lang)}: '{tname}'", key=f"save_btn_{fid}"):
-                                save_target_profile(
-                                    name=tname,
-                                    embeddings=t_entry["embeddings"],
-                                    hists_full=t_entry["hists_full"],
-                                    hists_top=t_entry["hists_top"],
-                                    created_by=current_user
-                                )
-                                st.success(get_text('saved', lang))
+                            st.success(get_text('saved', lang))
         
         if targets_db:
             st.markdown(f"<span style='color:#1dd1a1;'>{len(targets_db)} {get_text('targets_selected', lang)}</span>", unsafe_allow_html=True)
@@ -544,7 +559,6 @@ with tab1:
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                results_container = st.empty()
                 
                 total_detections = 0
                 total_matches = 0
@@ -563,14 +577,6 @@ with tab1:
                     video_result_dir = create_result_directory(video_name, current_user)
                     email_summary[video_name] = {}
                     
-                    # Track search metadata for summary visualization
-                    search_metadata = {
-                        "video_name": video_name,
-                        "total_detections": 0,
-                        "matches": [],
-                        "target_counts": {}
-                    }
-                    
                     try:
                         cap = cv2.VideoCapture(temp_video_path)
                         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -587,12 +593,7 @@ with tab1:
                             
                             # Process every Nth frame based on interval
                             if frame_count % frame_interval == 0:
-                                # Detect persons in frame with lower confidence threshold
                                 results = models['detector'](frame, classes=0, conf=0.3, verbose=False)
-                                
-                                # If no detections with 0.3 confidence, try with lower threshold
-                                if not results or len(results) == 0:
-                                    results = models['detector'](frame, classes=0, conf=0.15, verbose=False)
                                 
                                 for r in results:
                                     boxes = r.boxes
@@ -600,22 +601,15 @@ with tab1:
                                         continue
                                     
                                     for box in boxes:
-                                        try:
-                                            # Extract and convert coordinates properly
-                                            coords = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy, 'cpu') else box.xyxy[0]
-                                            x1, y1, x2, y2 = map(int, coords)
-                                        except (IndexError, AttributeError, TypeError):
-                                            continue
+                                        x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
                                         x1, y1 = max(0, x1), max(0, y1)
                                         x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
                                         
-                                        # Reduced minimum size to catch more detections (was 10x10, now 5x5)
-                                        if (x2 - x1) >= 5 and (y2 - y1) >= 5:
+                                        if (x2 - x1) >= 10 and (y2 - y1) >= 10:
                                             person_frame = frame[y1:y2, x1:x2]
                                             person_img_pil = Image.fromarray(cv2.cvtColor(person_frame, cv2.COLOR_BGR2RGB))
                                             
                                             total_detections += 1
-                                            search_metadata["total_detections"] += 1
                                             
                                             # Extract features
                                             embedding = extract_embedding(
@@ -623,11 +617,7 @@ with tab1:
                                                 models['reid_model'],
                                                 models['base_transform']
                                             )
-                                            
                                             hist = get_part_histogram(person_img_pil)
-                                            
-                                            # Try to detect gender
-                                            gender = "Unknown"
                                             
                                             # Match against targets
                                             matches = batch_match_targets(
@@ -642,49 +632,30 @@ with tab1:
                                                 total_matches += len(matches)
                                                 for match in matches:
                                                     color_name = get_dominant_color_name(person_img_pil)
+                                                    timestamp = f"{frame_count:06d}"
                                                     
-                                                    # Calculate timestamp: mm:ss
-                                                    seconds = frame_count / fps
-                                                    mins = int(seconds // 60)
-                                                    secs = int(seconds % 60)
-                                                    time_str = f"{mins:02d}m{secs:02d}s"
-                                                    full_timestamp = f"{time_str}_{frame_count:06d}"
-                                                    
-                                                    accuracy_percent = match['similarity'] * 100
                                                     save_detection_image(
                                                         person_frame,
                                                         match['target_name'],
                                                         color_name,
-                                                        gender,
+                                                        "Unknown", # Gender
                                                         video_result_dir,
-                                                        full_timestamp,
-                                                        accuracy_percent
+                                                        timestamp,
+                                                        match['similarity'] * 100 # Accuracy
                                                     )
                                                     
                                                     # Track for email
                                                     target_name = match['target_name']
                                                     if target_name not in email_summary[video_name]:
                                                         email_summary[video_name][target_name] = []
-                                                        email_summary[video_name][target_name].append({
-                                                            "color": color_name,
-                                                            "gender": gender,
-                                                            "accuracy": accuracy_percent
-                                                        })
-                                                        
-                                                        # Track metadata for visualization
-                                                        search_metadata["matches"].append({
-                                                            "target": target_name,
-                                                            "score": match['similarity'],
-                                                            "timestamp": seconds,
-                                                            "color": color_name,
-                                                            "gender": gender
-                                                        })
-                                                        search_metadata["target_counts"][target_name] = search_metadata["target_counts"].get(target_name, 0) + 1
+                                                    email_summary[video_name][target_name].append({
+                                                        "color": color_name,
+                                                        "accuracy": match['similarity'] * 100
+                                                    })
                             
                             frame_count += 1
                             processed_frames += 1
-                            progress = min(processed_frames / (total_frames // frame_interval), 1.0)
-                            progress_bar.progress(progress)
+                            progress_bar.progress(min(processed_frames / (total_frames // frame_interval), 1.0))
                             status_text.text(f"Video: {video_name} | Detections: {total_detections} | Matches: {total_matches}")
                         
                         cap.release()
@@ -693,32 +664,8 @@ with tab1:
                         st.error(f"Error processing video {video_name}: {str(e)}")
                     
                     finally:
-                        # Save summary metadata file for Results visualization
-                        try:
-                            summary_path = os.path.join(video_result_dir, "summary.json")
-                            with open(summary_path, 'w', encoding='utf-8') as f:
-                                json.dump(search_metadata, f, indent=4, ensure_ascii=False)
-                        except:
-                            pass
-                            
-                        # Clean up temp file
                         if os.path.exists(temp_video_path):
                             os.remove(temp_video_path)
-                        
-                        # === LOG SEARCH HISTORY ===
-                        try:
-                            from database import log_search
-                            for t in targets_db:
-                                t_name = t['name']
-                                t_found = len(email_summary.get(video_name, {}).get(t_name, []))
-                                log_search(
-                                    username=current_user,
-                                    video_name=video_name,
-                                    target_name=t_name,
-                                    total_found=t_found
-                                )
-                        except Exception as db_err:
-                            st.warning(f"Could not save search history: {str(db_err)}")
                 
                 # Final results
                 progress_bar.progress(1.0)
@@ -726,11 +673,14 @@ with tab1:
                 # Send email report if enabled
                 if enable_email and recipient_emails and total_matches > 0:
                     try:
+                        from email_service import send_email_report
                         success, msg = send_email_report(email_summary, recipient_emails, username=current_user)
                         if success:
                             st.info(f"Email sent to {', '.join(recipient_emails)}")
                         else:
-                            st.warning(f"Email not sent: {msg}")
+                            from email_service import get_email_credentials
+                            s_email, _ = get_email_credentials(current_user)
+                            st.error(f"Email not sent (Attempted From: {s_email}): {msg}")
                     except Exception as e:
                         st.warning(f"Could not send email: {str(e)}")
                 
@@ -738,7 +688,6 @@ with tab1:
                     st.success(f"Search Complete! Found {total_matches} matches in {total_detections} detections")
                 else:
                     st.info(f"No matches found in {total_detections} detections")
-
 
 # ===== TAB 2: RESULTS =====
 with tab2:
@@ -758,36 +707,6 @@ with tab2:
         for video in videos:
             with st.expander(f"Video: {video}", expanded=True):
                 video_dir = os.path.join(user_result_dir, video)
-                
-                # --- Dashbord Summary ---
-                summary_path = os.path.join(video_dir, "summary.json")
-                if os.path.exists(summary_path):
-                    with open(summary_path, 'r', encoding='utf-8') as f:
-                        m_data = json.load(f)
-                    
-                    st.markdown("#### " + ("Search Analytics" if lang == 'en' else "ข้อมูลสรุปการค้นหา"))
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric(get_text('total_found', lang), len(m_data.get("matches", [])))
-                    c2.metric("Total People Found", m_data.get("total_detections", 0))
-                    precision = (len(m_data.get("matches", [])) / m_data.get("total_detections", 1) * 100)
-                    c3.metric("Discovery Rate", f"{precision:.1f}%")
-                    
-                    if m_data.get("matches"):
-                        df = pd.DataFrame(m_data["matches"])
-                        
-                        col_chart1, col_chart2 = st.columns(2)
-                        with col_chart1:
-                            st.caption("Matches per Target" if lang == 'en' else "จำนวนที่พบแยกตามเป้าหมาย")
-                            target_counts = df['target'].value_counts()
-                            st.bar_chart(target_counts)
-                        
-                        with col_chart2:
-                            st.caption("Detection Timeline (seconds)" if lang == 'en' else "ช่วงเหตุการณ์ที่พบ (วินาที)")
-                            # Format for timeline: count occurrences in 5s buckets
-                            df['time_bucket'] = (df['timestamp'] // 5) * 5
-                            timeline_data = df.groupby('time_bucket').size()
-                            st.area_chart(timeline_data)
-                    st.divider()
                 images = sorted(
                     glob.glob(os.path.join(video_dir, "*.jpg")),
                     key=os.path.getmtime,
@@ -802,16 +721,7 @@ with tab2:
                         # Parse filename: Found_targetname_color_gender_accuracy%_time_frame.jpg
                         parts = fname.replace('.jpg', '').split('_')
                         target_name = parts[1] if len(parts) > 1 else "Unknown"
-                        accuracy_str = parts[4] if len(parts) > 4 else "N/A"  # accuracy% is at index 4
-                        
-                        # New timestamp parsing (parts[5] is time_str e.g. 01m38s)
-                        time_info = ""
-                        if len(parts) > 5 and 'm' in parts[5] and 's' in parts[5]:
-                            time_str_val = parts[5].replace('m', ':').replace('s', '')
-                            time_info = f" | {time_str_val}"
-                        
-                        # Format display: target name + accuracy + time
-                        display_label = f"{target_name}\n {accuracy_str}{time_info}"
+                        display_label = f"{target_name} ({parts[4]})" if len(parts) > 4 else target_name
                         
                         cols[i % 5].image(img, use_container_width=True)
                         cols[i % 5].caption(display_label)
@@ -819,6 +729,28 @@ with tab2:
                     st.caption(get_text('no_detected_results', lang))
     else:
         st.info("Results directory not found")
+
+# ===== Documentation =====
+st.markdown("---")
+with st.expander(get_text('documentation', lang)):
+    st.markdown(f"""
+    ### {get_text('quick_start', lang)}
+    1. **{get_text('add_targets', lang).split(' - ')[0]}** - {get_text('add_targets', lang).split(' - ')[1]}
+    2. **{get_text('upload_video', lang).split(' - ')[0]}** - {get_text('upload_video', lang).split(' - ')[1]}
+    3. **{get_text('configure', lang).split(' - ')[0]}** - {get_text('configure', lang).split(' - ')[1]}
+    4. **{get_text('search_process', lang).split(' - ')[0]}** - {get_text('search_process', lang).split(' - ')[1]}
+    5. **{get_text('review_results', lang).split(' - ')[0]}** - {get_text('review_results', lang).split(' - ')[1]}
+    
+    ### {get_text('parameters', lang)}
+    - **{get_text('similarity', lang)}** - {get_text('similarity_help', lang)}
+    - **{get_text('color_weight', lang)}** - {get_text('color_weight_help', lang)}
+    - **{get_text('interval', lang)}** - {get_text('interval_help', lang)}
+    
+    ### {get_text('tips', lang)}
+    - {get_text('tip_1', lang)}
+    - {get_text('tip_2', lang)}
+    - {get_text('tip_3', lang)}
+    """)
 
 
 
