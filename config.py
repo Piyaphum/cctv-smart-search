@@ -28,4 +28,3 @@ SENDER_PASSWORD = "your_email_app_password"
 
 # Model Paths
 YOLO_MODEL = 'yolov8n.pt'
-CLIP_MODEL = "openai/clip-vit-base-patch32"

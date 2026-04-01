@@ -7,8 +7,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torchvision.models import resnet50, ResNet50_Weights
 from ultralytics import YOLO
-from transformers import CLIPProcessor, CLIPModel
-from config import YOLO_MODEL, CLIP_MODEL
+from config import YOLO_MODEL
 
 
 @st.cache_resource
@@ -43,16 +42,7 @@ def load_transforms():
     return base_transform, aug_transform
 
 
-@st.cache_resource
-def load_clip_model():
-    """Load CLIP model for text-to-image search - lazy loaded with fallback"""
-    try:
-        model = CLIPModel.from_pretrained(CLIP_MODEL)
-        processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
-        return model, processor
-    except Exception:
-        # Silenced warning as requested by user
-        return None, None
+
 
 
 def get_all_models():
@@ -60,18 +50,9 @@ def get_all_models():
     detector = load_detection_model()
     reid_model = load_reid_model()
     base_tf, aug_tf = load_transforms()
-    
-    # CLIP model is optional - load with error handling
-    try:
-        clip_model, clip_processor = load_clip_model()
-    except Exception:
-        clip_model, clip_processor = None, None
-    
     return {
         'detector': detector,
         'reid_model': reid_model,
         'base_transform': base_tf,
-        'aug_transform': aug_tf,
-        'clip_model': clip_model,
-        'clip_processor': clip_processor
+        'aug_transform': aug_tf
     }

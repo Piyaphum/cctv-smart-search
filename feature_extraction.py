@@ -20,36 +20,7 @@ def extract_embedding(image_pil, reid_model, transform):
     return feature
 
 
-def get_text_embedding(text, clip_model, clip_processor):
-    """Get embedding from text description"""
-    inputs = clip_processor(text=[text], return_tensors="pt", padding=True)
-    with torch.no_grad():
-        text_outputs = clip_model.text_model(**inputs)
-        last_hidden = text_outputs.last_hidden_state
-        cls_token = last_hidden[:, 0, :]
-        if hasattr(clip_model, 'text_projection'):
-            text_embeds = clip_model.text_projection(cls_token)
-        else:
-            text_embeds = cls_token
-    normalized = F.normalize(text_embeds, p=2, dim=-1)
-    result = normalized.squeeze().cpu().detach().numpy()
-    return result if result.ndim == 1 else result.flatten()
 
-
-def get_image_embedding_clip(image_pil, clip_model, clip_processor):
-    """Get image embedding from CLIP"""
-    inputs = clip_processor(images=image_pil, return_tensors="pt")
-    with torch.no_grad():
-        vision_outputs = clip_model.vision_model(**inputs)
-        last_hidden = vision_outputs.last_hidden_state
-        cls_token = last_hidden[:, 0, :]
-        if hasattr(clip_model, 'visual_projection'):
-            image_embeds = clip_model.visual_projection(cls_token)
-        else:
-            image_embeds = cls_token
-    normalized = F.normalize(image_embeds, p=2, dim=-1)
-    result = normalized.squeeze().cpu().detach().numpy()
-    return result if result.ndim == 1 else result.flatten()
 
 
 def get_part_histogram(image_pil, part='full'):
@@ -125,45 +96,9 @@ def get_dominant_color_name(image_pil):
         return "Unknown"
 
 
-def extract_colors_from_text(text):
-    """Extract color names from search text"""
-    colors = {
-        'white': ['white', 'ขาว'],
-        'black': ['black', 'ดำ'],
-        'red': ['red', 'แดง'],
-        'blue': ['blue', 'น้ำเงิน', 'ฟ้า'],
-        'green': ['green', 'เขียว'],
-        'yellow': ['yellow', 'เหลือง'],
-        'orange': ['orange', 'ส้ม'],
-        'purple': ['purple', 'ม่วง'],
-        'pink': ['pink', 'ชมพู'],
-        'brown': ['brown', 'น้ำตาล', 'กาแฟ'],
-        'gray': ['gray', 'grey', 'เทา'],
-    }
-    
-    found_colors = []
-    text_lower = text.lower()
-    for color_name, variations in colors.items():
-        for variation in variations:
-            if variation in text_lower:
-                found_colors.append(color_name)
-                break
-    return found_colors
+
 
 
 def detect_gender(image_pil):
     """Detect gender from image (DeepFace removed)"""
     return 'Unknown'
-
-
-def extract_gender_from_text(text):
-    """Extract gender from search text"""
-    text_lower = text.lower()
-    female_keywords = ['woman', 'girl', 'female', 'lady', 'ผู้หญิง', 'หญิง', 'สาว']
-    male_keywords = ['man', 'boy', 'male', 'gentleman', 'ผู้ชาย', 'ชาย', 'หนุ่ม']
-    
-    if any(keyword in text_lower for keyword in female_keywords):
-        return 'Female'
-    if any(keyword in text_lower for keyword in male_keywords):
-        return 'Male'
-    return None

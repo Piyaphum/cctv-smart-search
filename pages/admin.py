@@ -1,9 +1,9 @@
 """
-📊 pages/admin.py — Admin Dashboard
+pages/admin.py — Admin Dashboard
 =====================================
 Streamlit รองรับ Multi-page App อัตโนมัติ!
 ถ้าสร้างโฟลเดอร์ pages/ และวางไฟล์ .py ไว้
-มันจะโผล่ใน Sidebar โดยอัตโนมัติ ✨
+มันจะโผล่ใน Sidebar โดยอัตโนมัติ
 
 หน้านี้ทำหน้าที่:
   - แสดงสถิติภาพรวม (total searches, total detections)
@@ -29,7 +29,7 @@ except Exception:
 st.set_page_config(page_title="Admin Panel | CCTV Search", layout="wide")
 
 # ─────────────────────────────────────────────
-# 🔐 ตรวจสอบ Login ก่อน (เหมือนกับ app.py)
+# ตรวจสอบ Login ก่อน (เหมือนกับ app.py)
 # ─────────────────────────────────────────────
 with open('auth_config.yaml', 'r', encoding='utf-8') as f:
     auth_config = yaml.safe_load(f)
@@ -42,7 +42,7 @@ authenticator = stauth.Authenticate(
 )
 
 if not st.session_state.get('authentication_status'):
-    st.error("❌ กรุณา Login ที่หน้าหลักก่อน")
+    st.error("กรุณา Login ที่หน้าหลักก่อน")
     st.stop()  # หยุดทันทีถ้ายังไม่ login
 
 # ────────────────────────────────────
@@ -54,7 +54,7 @@ current_role = auth_config['credentials']['usernames'].get(current_user, {}).get
 # ── Sidebar: แสดง user info + Logout ──
 with st.sidebar:
     current_name = st.session_state.get('name', 'Unknown')
-    st.markdown(f"### 👤 {current_name}")
+    st.markdown(f"### {current_name}")
     st.caption(f"Role: `{current_role}`")
     authenticator.logout('Logout', 'sidebar')
 
@@ -62,28 +62,28 @@ with st.sidebar:
 # 🔐 เฉพาะ Admin เท่านั้นที่เข้าหน้านี้ได้
 # ─────────────────────────────────────────────
 if current_role != 'admin':
-    st.error("🚫 หน้านี้สำหรับ Admin เท่านั้น")
+    st.error("หน้านี้สำหรับ Admin เท่านั้น")
     st.info("กลับไปหน้าหลักที่ sidebar ด้านซ้าย")
     st.stop()
 
 # ─────────────────────────────────────────────
 # 📊 Admin Dashboard
 # ─────────────────────────────────────────────
-st.title("🛡️ Admin Dashboard")
+st.title("Admin Dashboard")
 st.markdown("ภาพรวมการใช้งานระบบ CCTV Search ทั้งหมด")
 
 # --- สถิติภาพรวม (Metric Cards) ---
 stats = get_summary_stats()
 
 col1, col2, col3 = st.columns(3)
-col1.metric("📋 Total Searches", stats['total_searches'])
-col2.metric("🎯 Total Detections", stats['total_detected'])
-col3.metric("👥 Active Users", len(stats['top_users']))
+col1.metric("Total Searches", stats['total_searches'])
+col2.metric("Total Detections", stats['total_detected'])
+col3.metric("Active Users", len(stats['top_users']))
 
 st.divider()
 
 # --- Top Users ---
-st.subheader("🏆 Top Users (by search count)")
+st.subheader("Top Users (by search count)")
 if stats['top_users']:
     for rank, (uname, count) in enumerate(stats['top_users'], 1):
         st.markdown(f"**{rank}.** `{uname}` — {count} ครั้ง")
@@ -93,7 +93,7 @@ else:
 st.divider()
 
 # --- ตารางประวัติทั้งหมด ---
-st.subheader("📜 Search History (ทั้งหมด)")
+st.subheader("Search History (ทั้งหมด)")
 
 # ดึง filter option (User & Date)
 c1, c2 = st.columns(2)
@@ -165,10 +165,10 @@ st.divider()
 # ─────────────────────────────────────────────
 # 👥 ระบบจัดการผู้ใช้งาน (User Management)
 # ─────────────────────────────────────────────
-st.subheader("👥 User Management")
+st.subheader("User Management")
 st.markdown("เพิ่มผู้ใช้งานใหม่ รวมถึงดู แก้ไข และลบข้อมูลของระบบทั้งหมดได้จากศูนย์กลางเดียว")
 
-t_add, t_manage = st.tabs(["➕ Add New User", "🛠️ Manage Users"])
+t_add, t_manage = st.tabs(["Add New User", "Manage Users"])
 
 with t_add:
     with st.form("new_user_form_admin"):
@@ -184,7 +184,7 @@ with t_add:
         new_password = st.text_input("Password (min 8 chars)", type="password")
         new_role_label = st.selectbox("Role", options=["viewer", "admin"])
         
-        if st.form_submit_button("✅ Create User", type="primary"):
+        if st.form_submit_button("Create User", type="primary"):
             new_username = new_username.strip()
             new_fname = new_fname.strip()
             new_lname = new_lname.strip()
@@ -207,7 +207,7 @@ with t_add:
                     }
                     if supabase:
                         supabase.table('users').insert(data).execute()
-                        st.success("✅ สร้างผู้ใช้ใหม่ลงระบบ Cloud สำเร็จ!")
+                        st.success("สร้างผู้ใช้ใหม่ลงระบบ Cloud สำเร็จ!")
                         import time
                         time.sleep(1)
                         st.rerun()
@@ -265,7 +265,7 @@ with t_manage:
             }
         )
         
-        if st.form_submit_button("💾 Save User Changes", type="primary"):
+        if st.form_submit_button("Save User Changes", type="primary"):
             try:
                 for index, row in edited_df.iterrows():
                     data = {
@@ -276,13 +276,13 @@ with t_manage:
                     if supabase:
                         supabase.table('users').update(data).eq('username', row["Username"]).execute()
                     
-                st.success("✅ ซิงค์ข้อมูลผู้ใช้งานลง Supabase แล้ว!")
+                st.success("ซิงค์ข้อมูลผู้ใช้งานลง Supabase แล้ว!")
                 st.rerun()
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud: {e}")
 
     st.markdown("---")
-    st.markdown("**🔑 Change User Password (เปลี่ยนรหัสผ่านผู้ใช้)**")
+    st.markdown("** Change User Password (เปลี่ยนรหัสผ่านผู้ใช้)**")
     
     with st.form("admin_change_password_form"):
         available_users = df_users["Username"].tolist() if not df_users.empty else []
@@ -290,7 +290,7 @@ with t_manage:
         new_pass = st.text_input("รหัสผ่านใหม่ (New Password)", type="password", help="อย่างน้อย 8 ตัวอักษร")
         new_pass_confirm = st.text_input("ยืนยันรหัสผ่านใหม่ (Confirm Password)", type="password")
         
-        if st.form_submit_button("🔥 Update Password", type="primary"):
+        if st.form_submit_button("Update Password", type="primary"):
             if not target_user:
                 st.warning("กรุณาเลือกผู้ใช้")
             elif len(new_pass) < 8:
@@ -302,7 +302,7 @@ with t_manage:
                     hashed_pw = stauth.Hasher([new_pass]).generate()[0]
                     if supabase:
                         supabase.table('users').update({'password_hash': hashed_pw}).eq('username', target_user).execute()
-                        st.success(f"✅ เปลี่ยนรหัสผ่านสำหรับ {target_user} บน Cloud สำเร็จ!")
+                        st.success(f"เปลี่ยนรหัสผ่านสำหรับ {target_user} บน Cloud สำเร็จ!")
                         
                     # อัปเดตไฟล์ Local เผื่อไว้
                     if target_user in auth_config['credentials']['usernames']:
@@ -313,7 +313,7 @@ with t_manage:
                     st.error(f"เกิดข้อผิดพลาด: {e}")
 
     st.markdown("---")
-    st.markdown("**🗑️ Delete User (ลบผู้ใช้)**")
+    st.markdown("** Delete User (ลบผู้ใช้)**")
     
     col_del1, col_del2 = st.columns([3, 1])
     with col_del1:
@@ -321,11 +321,11 @@ with t_manage:
         available_users = df_users["Username"].tolist() if not df_users.empty else []
         del_user = st.selectbox("เลือกผู้ใช้ออกจากระบบ:", options=[""] + available_users, label_visibility="collapsed")
     with col_del2:
-        if st.button("❌ ลบผู้ใช้", use_container_width=True):
+        if st.button("ลบผู้ใช้", use_container_width=True):
             if not del_user:
                 st.warning("กรุณาเลือกผู้ใช้ที่ต้องการลบ")
             elif del_user == current_user:
-                st.error("❌ ไม่สามารถลบบัญชีที่ตัวเองกำลังใช้งานอยู่ได้")
+                st.error("ไม่สามารถลบบัญชีที่ตัวเองกำลังใช้งานอยู่ได้")
             else:
                 if supabase:
                     supabase.table('users').delete().eq('username', del_user).execute()
@@ -339,7 +339,7 @@ st.divider()
 # ─────────────────────────────────────────────
 # 🧹 เครื่องมือทำความสะอาด (System Clean-up)
 # ─────────────────────────────────────────────
-st.subheader("🧹 System Clean-up (Admin Only)")
+st.subheader("System Clean-up (Admin Only)")
 st.markdown("""
 **Note:** Admins can clear the entire system cache. 
 Regular users can clear their personal cache from the main page.
@@ -363,10 +363,10 @@ except:
     res_size, tmp_size = 0, 0
 
 c1, c2 = st.columns(2)
-c1.info(f"📁 **Results Folder (All Users):** {res_size:.2f} MB")
-c2.info(f"📂 **Temp Videos:** {tmp_size:.2f} MB")
+c1.info(f"Results Folder (All Users): {res_size:.2f} MB")
+c2.info(f"Temp Videos: {tmp_size:.2f} MB")
 
-if st.button("🗑️ Clear ALL System Caches", type="primary"):
+if st.button("Clear ALL System Caches", type="primary"):
     # เคลียร์ temp_video
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
@@ -377,5 +377,5 @@ if st.button("🗑️ Clear ALL System Caches", type="primary"):
         shutil.rmtree(RESULT_DIR)
         os.makedirs(RESULT_DIR)
         
-    st.success("✅ All system caches cleared successfully!")
+    st.success("All system caches cleared successfully!")
     st.rerun()

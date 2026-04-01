@@ -111,7 +111,7 @@ TRANSLATIONS = {
         "confirm_password": "ยืนยันรหัสผ่าน",
         "register_button": "สมัครสมาชิก",
         "passwords_not_match": "รหัสผ่านไม่ตรงกัน",
-        "registration_success": "✅ สมัครสมาชิกสำเร็จ! กรุณาล็อกอินด้านบน",
+        "registration_success": "สมัครสมาชิกสำเร็จ! กรุณาล็อกอินด้านบน",
         
         # User Management CRUD
         "manage_users": "จัดการผู้ใช้",
@@ -232,7 +232,7 @@ TRANSLATIONS = {
         "confirm_password": "Confirm Password",
         "register_button": "Register",
         "passwords_not_match": "Passwords do not match.",
-        "registration_success": "✅ Registration successful! Please log in above.",
+        "registration_success": "Registration successful! Please log in above.",
         
         # User Management CRUD
         "manage_users": "Manage Users",

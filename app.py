@@ -8,6 +8,8 @@ import shutil
 import cv2
 from PIL import Image
 import glob
+import json
+import pandas as pd
 
 # ===== Import Modules =====
 from config import RESULT_DIR, TEMP_DIR, DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_COLOR_STRICTNESS, DEFAULT_SNAPSHOT_INTERVAL
@@ -224,7 +226,7 @@ if not st.session_state.get('authentication_status'):
                                     import yaml
                                     yaml.dump(auth_config, f, default_flow_style=False, sort_keys=False)
                             
-                            st.success("✅ เปลี่ยนรหัสผ่านสำเร็จแล้ว! กรุณาล็อกอินด้วยรหัสผ่านใหม่")
+                            st.success("เปลี่ยนรหัสผ่านสำเร็จแล้ว! กรุณาล็อกอินด้วยรหัสผ่านใหม่")
                             st.session_state.reset_step = 1
                             st.session_state.reset_target_user = None
                             st.session_state.reset_code = None
@@ -309,7 +311,7 @@ with st.sidebar:
             sys_email = st.text_input("Sender Email", value=curr_email, key=f"email_input_{current_user}")
             sys_pass = st.text_input("App Password", value=curr_pass, type="password", key=f"pass_input_{current_user}")
             
-            if st.button("💾 Save Settings", type="primary", key=f"save_btn_{current_user}"):
+            if st.button("Save Settings", type="primary", key=f"save_btn_{current_user}"):
                 if current_user not in all_user_settings:
                     all_user_settings[current_user] = {}
                 
@@ -321,7 +323,7 @@ with st.sidebar:
                     import yaml
                     with open('user_settings.yaml', 'w', encoding='utf-8') as f:
                         yaml.dump(all_user_settings, f, default_flow_style=False)
-                    st.success("✅ บันทึกสำเร็จ!")
+                    st.success("บันทึกสำเร็จ!")
                     # Briefly wait or rerun to refresh view if needed
                     # st.rerun() 
                 except Exception as e:
@@ -332,7 +334,7 @@ with st.sidebar:
     # Personal cache management (Admin only)
     user_role = auth_config['credentials']['usernames'].get(current_user, {}).get('role', 'viewer')
     if user_role == 'admin':
-        st.markdown("### 🧹 " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
+        st.markdown("### " + ("Clear Personal Cache" if st.session_state.language == 'en' else "ล้างแคชส่วนตัว"))
         
         def get_user_cache_size():
             """Get cache size for current user"""
@@ -349,10 +351,10 @@ with st.sidebar:
             return total / (1024 * 1024)  # Convert to MB
         
         cache_size = get_user_cache_size()
-        st.info(f"📊 {cache_size:.2f} MB" if st.session_state.language == 'en' else f"📊 {cache_size:.2f} MB")
+        st.info(f"{cache_size:.2f} MB" if st.session_state.language == 'en' else f"{cache_size:.2f} MB")
         
         if st.button(
-            "🗑️ Clear My Cache" if st.session_state.language == 'en' else "🗑️ ล้างแคชของฉัน",
+            "Clear My Cache" if st.session_state.language == 'en' else "ล้างแคชของฉัน",
             type="secondary",
             use_container_width=True
         ):
@@ -362,7 +364,7 @@ with st.sidebar:
                     import shutil
                     shutil.rmtree(user_cache_dir)
                     os.makedirs(user_cache_dir)
-                    st.success("✅ Cache cleared!" if st.session_state.language == 'en' else "✅ ล้างแคชเรียบร้อยแล้ว!")
+                    st.success("Cache cleared!" if st.session_state.language == 'en' else "ล้างแคชเรียบร้อยแล้ว!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
@@ -461,7 +463,7 @@ with tab1:
                             st.success(get_text('saved', lang))
         
         if targets_db:
-            st.markdown(f"<span style='color:#1dd1a1;'>✓ {len(targets_db)} {get_text('targets_selected', lang)}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#1dd1a1;'>{len(targets_db)} {get_text('targets_selected', lang)}</span>", unsafe_allow_html=True)
         
         st.markdown("---")
         enable_email = st.checkbox(get_text('send_alerts', lang), value=True)
@@ -530,6 +532,14 @@ with tab1:
                     video_result_dir = create_result_directory(video_name, current_user)
                     email_summary[video_name] = {}
                     
+                    # Track search metadata for summary visualization
+                    search_metadata = {
+                        "video_name": video_name,
+                        "total_detections": 0,
+                        "matches": [],
+                        "target_counts": {}
+                    }
+                    
                     try:
                         cap = cv2.VideoCapture(temp_video_path)
                         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -574,6 +584,7 @@ with tab1:
                                             person_img_pil = Image.fromarray(cv2.cvtColor(person_frame, cv2.COLOR_BGR2RGB))
                                             
                                             total_detections += 1
+                                            search_metadata["total_detections"] += 1
                                             
                                             # Extract features
                                             embedding = extract_embedding(
@@ -600,7 +611,14 @@ with tab1:
                                                 total_matches += len(matches)
                                                 for match in matches:
                                                     color_name = get_dominant_color_name(person_img_pil)
-                                                    timestamp = f"{frame_count:06d}"
+                                                    
+                                                    # Calculate timestamp: mm:ss
+                                                    seconds = frame_count / fps
+                                                    mins = int(seconds // 60)
+                                                    secs = int(seconds % 60)
+                                                    time_str = f"{mins:02d}m{secs:02d}s"
+                                                    full_timestamp = f"{time_str}_{frame_count:06d}"
+                                                    
                                                     accuracy_percent = match['similarity'] * 100
                                                     save_detection_image(
                                                         person_frame,
@@ -608,7 +626,7 @@ with tab1:
                                                         color_name,
                                                         gender,
                                                         video_result_dir,
-                                                        timestamp,
+                                                        full_timestamp,
                                                         accuracy_percent
                                                     )
                                                     
@@ -616,17 +634,27 @@ with tab1:
                                                     target_name = match['target_name']
                                                     if target_name not in email_summary[video_name]:
                                                         email_summary[video_name][target_name] = []
-                                                    email_summary[video_name][target_name].append({
-                                                        "color": color_name,
-                                                        "gender": gender,
-                                                        "accuracy": accuracy_percent
-                                                    })
+                                                        email_summary[video_name][target_name].append({
+                                                            "color": color_name,
+                                                            "gender": gender,
+                                                            "accuracy": accuracy_percent
+                                                        })
+                                                        
+                                                        # Track metadata for visualization
+                                                        search_metadata["matches"].append({
+                                                            "target": target_name,
+                                                            "score": match['similarity'],
+                                                            "timestamp": seconds,
+                                                            "color": color_name,
+                                                            "gender": gender
+                                                        })
+                                                        search_metadata["target_counts"][target_name] = search_metadata["target_counts"].get(target_name, 0) + 1
                             
                             frame_count += 1
                             processed_frames += 1
                             progress = min(processed_frames / (total_frames // frame_interval), 1.0)
                             progress_bar.progress(progress)
-                            status_text.text(f"🎉 Video: {video_name} | Detections: {total_detections} | Matches: {total_matches}")
+                            status_text.text(f"Video: {video_name} | Detections: {total_detections} | Matches: {total_matches}")
                         
                         cap.release()
                     
@@ -634,6 +662,14 @@ with tab1:
                         st.error(f"Error processing video {video_name}: {str(e)}")
                     
                     finally:
+                        # Save summary metadata file for Results visualization
+                        try:
+                            summary_path = os.path.join(video_result_dir, "summary.json")
+                            with open(summary_path, 'w', encoding='utf-8') as f:
+                                json.dump(search_metadata, f, indent=4, ensure_ascii=False)
+                        except:
+                            pass
+                            
                         # Clean up temp file
                         if os.path.exists(temp_video_path):
                             os.remove(temp_video_path)
@@ -661,15 +697,14 @@ with tab1:
                     try:
                         success, msg = send_email_report(email_summary, recipient_emails, username=current_user)
                         if success:
-                            st.info(f"📧 Email sent to {', '.join(recipient_emails)}")
+                            st.info(f"Email sent to {', '.join(recipient_emails)}")
                         else:
                             st.warning(f"Email not sent: {msg}")
                     except Exception as e:
                         st.warning(f"Could not send email: {str(e)}")
                 
                 if total_matches > 0:
-                    st.balloons()
-                    st.success(f"✅ Search Complete! Found {total_matches} matches in {total_detections} detections")
+                    st.success(f"Search Complete! Found {total_matches} matches in {total_detections} detections")
                 else:
                     st.info(f"No matches found in {total_detections} detections")
 
@@ -690,8 +725,38 @@ with tab2:
             st.info(get_text('no_results_yet', lang))
         
         for video in videos:
-            with st.expander(f"{video}", expanded=True):
+            with st.expander(f"Video: {video}", expanded=True):
                 video_dir = os.path.join(user_result_dir, video)
+                
+                # --- Dashbord Summary ---
+                summary_path = os.path.join(video_dir, "summary.json")
+                if os.path.exists(summary_path):
+                    with open(summary_path, 'r', encoding='utf-8') as f:
+                        m_data = json.load(f)
+                    
+                    st.markdown("#### " + ("Search Analytics" if lang == 'en' else "ข้อมูลสรุปการค้นหา"))
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric(get_text('total_found', lang), len(m_data.get("matches", [])))
+                    c2.metric("Total People Found", m_data.get("total_detections", 0))
+                    precision = (len(m_data.get("matches", [])) / m_data.get("total_detections", 1) * 100)
+                    c3.metric("Discovery Rate", f"{precision:.1f}%")
+                    
+                    if m_data.get("matches"):
+                        df = pd.DataFrame(m_data["matches"])
+                        
+                        col_chart1, col_chart2 = st.columns(2)
+                        with col_chart1:
+                            st.caption("Matches per Target" if lang == 'en' else "จำนวนที่พบแยกตามเป้าหมาย")
+                            target_counts = df['target'].value_counts()
+                            st.bar_chart(target_counts)
+                        
+                        with col_chart2:
+                            st.caption("Detection Timeline (seconds)" if lang == 'en' else "ช่วงเหตุการณ์ที่พบ (วินาที)")
+                            # Format for timeline: count occurrences in 5s buckets
+                            df['time_bucket'] = (df['timestamp'] // 5) * 5
+                            timeline_data = df.groupby('time_bucket').size()
+                            st.area_chart(timeline_data)
+                    st.divider()
                 images = sorted(
                     glob.glob(os.path.join(video_dir, "*.jpg")),
                     key=os.path.getmtime,
@@ -703,13 +768,19 @@ with tab2:
                     for i, img_path in enumerate(images):
                         img = Image.open(img_path)
                         fname = os.path.basename(img_path)
-                        # Parse filename: Found_targetname_color_gender_accuracy%_timestamp.jpg
+                        # Parse filename: Found_targetname_color_gender_accuracy%_time_frame.jpg
                         parts = fname.replace('.jpg', '').split('_')
                         target_name = parts[1] if len(parts) > 1 else "Unknown"
                         accuracy_str = parts[4] if len(parts) > 4 else "N/A"  # accuracy% is at index 4
                         
-                        # Format display: target name + accuracy
-                        display_label = f"{target_name}\n📊 {accuracy_str}"
+                        # New timestamp parsing (parts[5] is time_str e.g. 01m38s)
+                        time_info = ""
+                        if len(parts) > 5 and 'm' in parts[5] and 's' in parts[5]:
+                            time_str_val = parts[5].replace('m', ':').replace('s', '')
+                            time_info = f" | {time_str_val}"
+                        
+                        # Format display: target name + accuracy + time
+                        display_label = f"{target_name}\n {accuracy_str}{time_info}"
                         
                         cols[i % 5].image(img, use_container_width=True)
                         cols[i % 5].caption(display_label)

@@ -1,5 +1,5 @@
 """
-📚 database.py — จัดการ Supabase Cloud Database ทั้งหมด
+database.py — จัดการ Supabase Cloud Database ทั้งหมด
 ==================================================
 ไฟล์นี้ทำหน้าที่เป็น "คลังข้อมูล" ของระบบบน Cloud
 """
@@ -16,7 +16,7 @@ except Exception as e:
     supabase = None
 
 def init_db():
-    print("✅ System adapted for Supabase Cloud Database")
+    print("System adapted for Supabase Cloud Database")
 
 # ฟังก์ชั่นช่วยแปลง numpy array ไปเป็น list สำหรับ json
 def convert_to_list(obj):
