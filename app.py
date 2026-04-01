@@ -51,8 +51,14 @@ try:
         auth_config['credentials'] = {'usernames': {}}
     
     if response.data:
+        # Streamlit-Authenticator uses lowercase usernames internally
+        if 'credentials' in auth_config and 'usernames' in auth_config['credentials']:
+            auth_config['credentials']['usernames'] = {
+                k.lower(): v for k, v in auth_config['credentials']['usernames'].items()
+            }
+            
         for user in response.data:
-            uname = user['username'].strip()
+            uname = user['username'].strip().lower()
             # Merge: This ensures users in auth_config.yaml are kept if not in DB
             auth_config['credentials']['usernames'][uname] = {
                 'email': user['email'],
@@ -112,7 +118,7 @@ if not st.session_state.get('authentication_status'):
                         hashed_pw = stauth.Hasher([reg_password]).generate()[0]
                         reg_name = f"{reg_fname} {reg_lname}"
                         data = {
-                            "username": reg_username,
+                            "username": reg_username.lower(),
                             "name": reg_name,
                             "email": reg_email,
                             "password_hash": hashed_pw,
@@ -156,12 +162,13 @@ if not st.session_state.get('authentication_status'):
                         
                         # Find user in Supabase
                         if supabase:
-                            res_u = supabase.table('users').select('*').eq('username', identifier.strip()).execute()
+                            # Username is case-insensitive for lookup
+                            res_u = supabase.table('users').select('*').ilike('username', identifier.strip()).execute()
                             if res_u.data:
                                 target_uname = res_u.data[0]['username']
                                 target_email = res_u.data[0]['email']
                             else:
-                                res_e = supabase.table('users').select('*').eq('email', identifier.strip()).execute()
+                                res_e = supabase.table('users').select('*').ilike('email', identifier.strip()).execute()
                                 if res_e.data:
                                     target_uname = res_e.data[0]['username']
                                     target_email = res_e.data[0]['email']
@@ -169,7 +176,7 @@ if not st.session_state.get('authentication_status'):
                         # Fallback
                         if not target_uname:
                             for un, dt in auth_config['credentials']['usernames'].items():
-                                if un == identifier.strip() or dt.get('email') == identifier.strip():
+                                if un.lower() == identifier.strip().lower() or dt.get('email', '').lower() == identifier.strip().lower():
                                     target_uname = un
                                     target_email = dt.get('email')
                                     break
